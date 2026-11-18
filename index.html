@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="fa" dir="rtl" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+  <meta name="theme-color" content="#020617" />
+  <meta name="color-scheme" content="dark light" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="format-detection" content="telephone=no" />
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
+  <link rel="icon" type="image/x-icon" href="/logo.ico" />
+
+  <title>8 سامانه مدیریت انبارداری ام گاز  (همگامسازی سه دیتابیس)</title>
+  <meta name="description" content="سامانه جامع انبارداری و مدیریت زنجیره تأمین ام گاز با معماری همگامسازی سه دیتابیس (Cloudflare D1 و دو دیتابیس محلی SQLite آفلاین برای ویندوز ۷ و ۱۱) و پشتیبانی کامل از زبان فارسی و راستچین" />
+  <meta property="og:title" content="8 سامانه مدیریت انبارداری ام گاز  (همگامسازی سه دیتابیس)" />
+  <meta property="og:description" content="سامانه جامع انبارداری و مدیریت زنجیره تأمین ام گاز با معماری همگامسازی سه دیتابیس (Cloudflare D1 و دو دیتابیس محلی SQLite آفلاین برای ویندوز ۷ و ۱۱) و پشتیبانی کامل از زبان فارسی و راستچین" />
+
+  <!-- Universal In-Head Compatibility & Polyfill Bootstrap (Runs before modules execute) -->
+  <script>
+    (function() {
+      // 1. globalThis polyfill
+      if (typeof globalThis === 'undefined') {
+        try { window.globalThis = window; } catch(e) {}
+      }
+
+      // 2. AbortSignal.timeout polyfill (Chrome < 103, older Safari / Firefox / WebViews)
+      if (typeof AbortSignal !== 'undefined' && !AbortSignal.timeout) {
+        AbortSignal.timeout = function(ms) {
+          var c = new AbortController();
+          setTimeout(function() {
+            try { c.abort(); } catch(e) {}
+          }, ms);
+          return c.signal;
+        };
+      }
+
+      // 3. String.prototype.replaceAll polyfill (Chrome < 85)
+      if (!String.prototype.replaceAll) {
+        String.prototype.replaceAll = function(searchValue, replaceValue) {
+          if (searchValue instanceof RegExp) {
+            return this.replace(searchValue, replaceValue);
+          }
+          return this.split(String(searchValue)).join(String(replaceValue));
+        };
+      }
+
+      // 4. Array.prototype.at polyfill (Chrome < 92)
+      if (!Array.prototype.at) {
+        Array.prototype.at = function(n) {
+          n = Math.trunc(n) || 0;
+          if (n < 0) n += this.length;
+          if (n < 0 || n >= this.length) return undefined;
+          return this[n];
+        };
+      }
+
+      // 5. WebKit & Safari iOS Protected crypto.randomUUID (Handles Sealed / Read-Only window.crypto)
+      try {
+        if (typeof window !== 'undefined') {
+          if (!window.crypto) {
+            try { Object.defineProperty(window, 'crypto', { value: {}, writable: true, configurable: true }); } catch(e) {}
+          }
+          if (window.crypto && typeof window.crypto.randomUUID !== 'function') {
+            var uuidFn = function() {
+              return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = (Math.random() * 16) | 0;
+                var v = c === 'x' ? r : (r & 0x3) | 0x8;
+                return v.toString(16);
+              });
+            };
+            try {
+              Object.defineProperty(window.crypto, 'randomUUID', { value: uuidFn, writable: true, configurable: true });
+            } catch(e) {
+              try { window.crypto.randomUUID = uuidFn; } catch(e2) {}
+            }
+          }
+        }
+      } catch(e) {}
+
+      // 6. Safe LocalStorage / SessionStorage guard (Prevents SecurityError when storage is blocked in Chrome/Safari)
+      try {
+        var testKey = '__probe_' + Math.random();
+        window.localStorage.setItem(testKey, '1');
+        window.localStorage.removeItem(testKey);
+      } catch (err) {
+        var memStorage = (function() {
+          var data = {};
+          return {
+            getItem: function(k) { return data[k] !== undefined ? data[k] : null; },
+            setItem: function(k, v) { data[k] = String(v); },
+            removeItem: function(k) { delete data[k]; },
+            clear: function() { data = {}; },
+            get length() { return Object.keys(data).length; },
+            key: function(i) { return Object.keys(data)[i] || null; }
+          };
+        })();
+        try { Object.defineProperty(window, 'localStorage', { value: memStorage, writable: true, configurable: true }); } catch(e) {}
+        try { Object.defineProperty(window, 'sessionStorage', { value: memStorage, writable: true, configurable: true }); } catch(e) {}
+      }
+
+      // 7. Safe History API (Prevents SecurityError: The operation is insecure in Safari iOS/macOS & sandboxes)
+      try {
+        if (typeof window !== 'undefined' && window.history) {
+          var origPush = window.history.pushState ? window.history.pushState.bind(window.history) : null;
+          var origReplace = window.history.replaceState ? window.history.replaceState.bind(window.history) : null;
+          if (origPush) {
+            window.history.pushState = function(state, title, url) {
+              try { return origPush(state, title, url); } catch(err) { console.warn('[SafeHistory] pushState caught:', err); }
+            };
+          }
+          if (origReplace) {
+            window.history.replaceState = function(state, title, url) {
+              try { return origReplace(state, title, url); } catch(err) { console.warn('[SafeHistory] replaceState caught:', err); }
+            };
+          }
+        }
+      } catch(e) {}
+
+      // 8. Safe window.matchMedia polyfill (Chrome < 39, older WebViews)
+      try {
+        if (typeof window !== 'undefined' && !window.matchMedia) {
+          window.matchMedia = function(query) {
+            return {
+              matches: false,
+              media: query,
+              onchange: null,
+              addListener: function() {},
+              removeListener: function() {},
+              addEventListener: function() {},
+              removeEventListener: function() {},
+              dispatchEvent: function() { return false; }
+            };
+          };
+        }
+      } catch(e) {}
+
+      // 9. Auto-clean stale Service Workers
+      try {
+        if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            for (var i = 0; i < regs.length; i++) {
+              regs[i].unregister().catch(function() {});
+            }
+          }).catch(function() {});
+        }
+      } catch(e) {}
+
+      // 10. Safe document.cookie reading
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+      try {
+        var match = document.cookie.match(/mgas_font_prefs_[^=]+=(.+?)(;|$)/);
+        if (match) {
+          var parsed = JSON.parse(decodeURIComponent(match[1]));
+          if (parsed && parsed.headingScale) document.documentElement.style.setProperty('--heading-font-scale', parsed.headingScale);
+          if (parsed && parsed.paragraphScale) document.documentElement.style.setProperty('--paragraph-font-scale', parsed.paragraphScale);
+        }
+      } catch(e) {}
+    })();
+  </script>
+</head>
+  <body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen transition-colors duration-200">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <noscript>
+      <div style="padding:2rem;text-align:center;font-family:sans-serif;color:#fff;background:#020617;min-height:100vh;" dir="rtl">
+        <h2>سامانه انبارداری ام گاز</h2>
+        <p>برای استفاده از این سامانه، لطفاً جاوااسکریپت (JavaScript) مرورگر خود را فعال نمایید.</p>
+      </div>
+    </noscript>
+  </body>
+</html>
