@@ -109,8 +109,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   suppliers,
   variant = 'full'
 }) => {
-  const reportTypeStorageKey = variant === 'financial' ? 'reports_type_financial' : 'reports_type_full';
-  const partyScopeStorageKey = variant === 'financial' ? 'reports_party_scope_financial' : 'reports_party_scope_full';
+  const isFinancialMode = variant === 'financial';
+  const reportTypeStorageKey = isFinancialMode ? 'reports_type_financial' : 'reports_type_full';
+  const partyScopeStorageKey = isFinancialMode ? 'reports_party_scope_financial' : 'reports_party_scope_full';
 
   // Master Party Scope Switch: همه طرف‌های حساب، تامین‌کنندگان، یا مشتریان
   const [reportPartyScope, setReportPartyScope] = useState<ReportPartyScope>(() =>
@@ -336,15 +337,38 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           currentQty = Number(whMap[selectedWarehouseId]) || 0;
         }
 
+        let resolvedWhId = p.warehouse_id;
+        if (!resolvedWhId) {
+          let maxQ = -1;
+          warehouses.forEach(w => {
+            const q = Number(whMap[w.warehouse_id]) || 0;
+            if (q > maxQ) {
+              maxQ = q;
+              resolvedWhId = w.warehouse_id;
+            }
+          });
+        }
+        const matchedWh = warehouses.find(w => w.warehouse_id === resolvedWhId) || warehouses[0];
+        let cleanWhName = (matchedWh?.name || 'انبار مرکزی').replace(/^انبار\s+/, '').trim();
+        const shelfLoc =
+          p.shelf_location ||
+          (p.shelf_letter && p.shelf_number ? `${p.shelf_letter}${p.shelf_number}` : '') ||
+          matchedWh?.shelf_location ||
+          '---';
+
         const isLow = currentQty > 0 && currentQty <= p.min_stock;
         const isOut = currentQty <= 0;
+        const varianceFromMin = currentQty - (p.min_stock || 0);
         const totalPurchaseValuation = currentQty * (p.purchase_price || 0);
         const totalSaleValuation = currentQty * (p.sale_price || 0);
 
         return {
           product: p,
           categoryName: cat?.name || 'دسته‌بندی متفرقه',
+          warehouseDisplayName: cleanWhName,
+          shelfLocation: shelfLoc,
           currentQty,
+          varianceFromMin,
           isLow,
           isOut,
           totalPurchaseValuation,
@@ -374,7 +398,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
         return true;
       });
-  }, [products, categories, stockQuantities, selectedWarehouseId, selectedCategoryId, selectedStockStatus, searchQuery]);
+  }, [products, categories, warehouses, stockQuantities, selectedWarehouseId, selectedCategoryId, selectedStockStatus, searchQuery]);
 
   // Inventory Totals
   const inventoryTotals = useMemo(() => {
@@ -742,25 +766,33 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         (inv) => inv.supplier_id === sup.supplier_id || (inv.party_name && inv.party_name.includes(sup.name))
       );
 
+      const lastActivityDate = supMovements.reduce((latest, m) => {
+        const dt = m.created_at || (m as any).date || '';
+        return dt > latest ? dt : latest;
+      }, '');
+
       return {
         supplier: sup,
         movementsCount: supMovements.length,
         totalItemsIn,
         totalValuation,
         invoicesCount: supInvoices.length,
-        currentBalance: sup.current_balance || 0
+        currentBalance: sup.current_balance || 0,
+        lastActivityDate
       };
     });
   }, [allSuppliers, stockMovements, invoiceMap, startDate, endDate, currentEnv]);
 
   const suppliersTotals = useMemo(() => {
     let totalSuppliers = suppliersAggregatedData.length;
+    let totalMovements = 0;
     let totalItemsIn = 0;
     let totalValuation = 0;
     let totalInvoices = 0;
     let totalBalance = 0;
 
     suppliersAggregatedData.forEach((s) => {
+      totalMovements += s.movementsCount;
       totalItemsIn += s.totalItemsIn;
       totalValuation += s.totalValuation;
       totalInvoices += s.invoicesCount;
@@ -769,6 +801,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
     return {
       totalSuppliers,
+      totalMovements,
       totalItemsIn,
       totalValuation,
       totalInvoices,
@@ -909,25 +942,33 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         (inv) => inv.customer_id === cust.customer_id || (inv.party_name && inv.party_name.includes(cust.name))
       );
 
+      const lastActivityDate = custMovements.reduce((latest, m) => {
+        const dt = m.created_at || (m as any).date || '';
+        return dt > latest ? dt : latest;
+      }, '');
+
       return {
         customer: cust,
         movementsCount: custMovements.length,
         totalItemsOut,
         totalValuation,
         invoicesCount: custInvoices.length,
-        currentBalance: cust.current_balance || 0
+        currentBalance: cust.current_balance || 0,
+        lastActivityDate
       };
     });
   }, [allCustomers, stockMovements, invoiceMap, inspectionMap, startDate, endDate, currentEnv]);
 
   const customersTotals = useMemo(() => {
     let totalCustomers = customersAggregatedData.length;
+    let totalMovements = 0;
     let totalItemsOut = 0;
     let totalValuation = 0;
     let totalInvoices = 0;
     let totalBalance = 0;
 
     customersAggregatedData.forEach((c) => {
+      totalMovements += c.movementsCount;
       totalItemsOut += c.totalItemsOut;
       totalValuation += c.totalValuation;
       totalInvoices += c.invoicesCount;
@@ -936,6 +977,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
     return {
       totalCustomers,
+      totalMovements,
       totalItemsOut,
       totalValuation,
       totalInvoices,
@@ -1147,20 +1189,29 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         XLSX.writeFile(wb, `ریز_اسناد_گردش_شیر_مشتریان_${new Date().toISOString().slice(0, 10)}.xlsx`);
       }
     } else if (reportType === 'inventory') {
-      const rows = filteredInventoryData.map((item, idx) => ({
-        'ردیف': idx + 1,
-        'نام کالا': item.product.name,
-        'کد کالا': item.product.sku,
-        'دسته‌بندی': item.categoryName,
-        'انبار هدف': selectedWarehouseId === 'all' ? 'همه انبارها' : warehouses.find(w => w.warehouse_id === selectedWarehouseId)?.name,
-        'موجودی فیزیکی': item.currentQty,
-        'واحد سنجش': item.product.unit || 'عدد',
-        'حداقل سفارش': item.product.min_stock,
-        'وضعیت موجودی': item.isOut ? 'ناموجود' : item.isLow ? 'نقطه سفارش' : 'موجود',
-        'قیمت خرید تومان': item.product.purchase_price,
-        'ارزش کل موجودی تومان': item.totalPurchaseValuation,
-        'قیمت فروش تومان': item.product.sale_price
-      }));
+      const rows = filteredInventoryData.map((item, idx) => {
+        const base: Record<string, any> = {
+          'ردیف': idx + 1,
+          'نام کالا': item.product.name,
+          'کد کالا': item.product.sku,
+          'دسته‌بندی': item.categoryName,
+          'انبار و محل قفسه': selectedWarehouseId === 'all'
+            ? `${item.warehouseDisplayName} (${item.shelfLocation})`
+            : `${warehouses.find(w => w.warehouse_id === selectedWarehouseId)?.name || item.warehouseDisplayName} (${item.shelfLocation})`,
+          'موجودی فیزیکی': item.currentQty,
+          'واحد سنجش': item.product.unit || 'عدد',
+          'حداقل سفارش': item.product.min_stock,
+          'اختلاف تا نقطه سفارش': item.varianceFromMin,
+          'وضعیت موجودی': item.isOut ? 'ناموجود' : item.isLow ? 'نقطه سفارش' : 'موجود',
+          'بارکد': item.product.barcode || '---'
+        };
+        if (isFinancialMode) {
+          base['قیمت خرید تومان'] = item.product.purchase_price;
+          base['ارزش کل موجودی تومان'] = item.totalPurchaseValuation;
+          base['قیمت فروش تومان'] = item.product.sale_price;
+        }
+        return base;
+      });
 
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
@@ -1169,39 +1220,51 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     } else if (reportType === 'suppliers' || reportType === 'party_report') {
       if (reportPartyScope === 'suppliers') {
         if (supplierFilterMode === 'ALL_SUPPLIERS') {
-          const rows = suppliersAggregatedData.map((item, idx) => ({
-            'ردیف': idx + 1,
-            'نام تامین‌کننده': item.supplier.name,
-            'عنوان شرکت / بازرگانی': item.supplier.company_name || '---',
-            'شماره تماس': item.supplier.phone || '---',
-            'کد اقتصادی': item.supplier.economic_code || '---',
-            'شهر / استان': `${item.supplier.province || ''} - ${item.supplier.city || ''}`,
-            'تعداد اقلام وارده': item.totalItemsIn,
-            'ارزش کل خریدهای ثبتی تومان': item.totalValuation,
-            'تعداد فاکتورهای خرید': item.invoicesCount,
-            'مانده حساب فعلی تومان': item.currentBalance
-          }));
+          const rows = suppliersAggregatedData.map((item, idx) => {
+            const base: Record<string, any> = {
+              'ردیف': idx + 1,
+              'نام تامین‌کننده': item.supplier.name,
+              'عنوان شرکت / بازرگانی': item.supplier.company_name || '---',
+              'شماره تماس': item.supplier.phone || '---',
+              'شهر / استان': `${item.supplier.province || ''} - ${item.supplier.city || ''}`,
+              'تعداد اسناد و محموله‌ها': item.movementsCount,
+              'تعداد اقلام وارده': item.totalItemsIn,
+              'تاریخ آخرین تحویل': item.lastActivityDate ? getPersianDate(item.lastActivityDate) : '---'
+            };
+            if (isFinancialMode) {
+              base['کد اقتصادی'] = item.supplier.economic_code || '---';
+              base['ارزش کل خریدهای ثبتی تومان'] = item.totalValuation;
+              base['تعداد فاکتورهای خرید'] = item.invoicesCount;
+              base['مانده حساب فعلی تومان'] = item.currentBalance;
+            }
+            return base;
+          });
 
           const ws = XLSX.utils.json_to_sheet(rows);
           const wb = XLSX.utils.book_new();
           XLSX.utils.book_append_sheet(wb, ws, 'تامین‌کنندگان');
           XLSX.writeFile(wb, `گزارش_تامین_کنندگان_ام_گاز_${new Date().toISOString().slice(0, 10)}.xlsx`);
         } else {
-          const rows = singleSupplierData.rows.map((row, idx) => ({
-            'ردیف': idx + 1,
-            'نام کالا': row.productName,
-            'کد کالا SKU': row.productSku,
-            'شماره سند': row.movement.document_number || '---',
-            'شماره بارنامه': row.waybillNo || '---',
-            'تاریخ شمسی': row.persianDate,
-            'تاریخ و زمان': formatPersianDateTime(row.movement.created_at),
-            'مقدار وارده': row.qty,
-            'واحد': row.unit,
-            'قیمت واحد تومان': row.unitPrice,
-            'مبلغ کل تومان': row.totalPrice,
-            'انبار مقصد': row.warehouseName,
-            'توضیحات': row.movement.notes || row.movement.description || '---'
-          }));
+          const rows = singleSupplierData.rows.map((row, idx) => {
+            const base: Record<string, any> = {
+              'ردیف': idx + 1,
+              'نام کالا': row.productName,
+              'کد کالا SKU': row.productSku,
+              'شماره سند': row.movement.document_number || '---',
+              'شماره بارنامه': row.waybillNo || '---',
+              'تاریخ شمسی': row.persianDate,
+              'تاریخ و زمان': formatPersianDateTime(row.movement.created_at),
+              'مقدار وارده': row.qty,
+              'واحد': row.unit,
+              'انبار مقصد': row.warehouseName,
+              'توضیحات': row.movement.notes || row.movement.description || '---'
+            };
+            if (isFinancialMode) {
+              base['قیمت واحد تومان'] = row.unitPrice;
+              base['مبلغ کل تومان'] = row.totalPrice;
+            }
+            return base;
+          });
 
           const ws = XLSX.utils.json_to_sheet(rows);
           const wb = XLSX.utils.book_new();
@@ -1212,38 +1275,50 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       } else {
         // reportPartyScope === 'customers'
         if (customerFilterMode === 'ALL_CUSTOMERS') {
-          const rows = customersAggregatedData.map((item, idx) => ({
-            'ردیف': idx + 1,
-            'نام مشتری': item.customer.name,
-            'شماره تماس': item.customer.phone || '---',
-            'کد اقتصادی / ملی': item.customer.economic_code || item.customer.national_id || '---',
-            'استان و شهر': `${item.customer.province || ''} - ${item.customer.city || ''}`,
-            'تعداد اقلام صادره / فروش': item.totalItemsOut,
-            'ارزش کل فروش‌های ثبتی تومان': item.totalValuation,
-            'تعداد فاکتورها': item.invoicesCount,
-            'مانده حساب فعلی تومان': item.currentBalance
-          }));
+          const rows = customersAggregatedData.map((item, idx) => {
+            const base: Record<string, any> = {
+              'ردیف': idx + 1,
+              'نام مشتری': item.customer.name,
+              'شماره تماس': item.customer.phone || '---',
+              'استان و شهر': `${item.customer.province || ''} - ${item.customer.city || ''}`,
+              'تعداد اسناد و حواله‌ها': item.movementsCount,
+              'تعداد اقلام صادره': item.totalItemsOut,
+              'تاریخ آخرین ارسال': item.lastActivityDate ? getPersianDate(item.lastActivityDate) : '---'
+            };
+            if (isFinancialMode) {
+              base['کد اقتصادی / ملی'] = item.customer.economic_code || item.customer.national_id || '---';
+              base['ارزش کل فروش‌های ثبتی تومان'] = item.totalValuation;
+              base['تعداد فاکتورها'] = item.invoicesCount;
+              base['مانده حساب فعلی تومان'] = item.currentBalance;
+            }
+            return base;
+          });
 
           const ws = XLSX.utils.json_to_sheet(rows);
           const wb = XLSX.utils.book_new();
           XLSX.utils.book_append_sheet(wb, ws, 'مشتریان');
           XLSX.writeFile(wb, `گزارش_مشتریان_ام_گاز_${new Date().toISOString().slice(0, 10)}.xlsx`);
         } else {
-          const rows = singleCustomerData.rows.map((row, idx) => ({
-            'ردیف': idx + 1,
-            'نام کالا': row.productName,
-            'کد کالا SKU': row.productSku,
-            'شماره سند': row.movement.document_number || '---',
-            'شماره بارنامه': row.waybillNo || '---',
-            'تاریخ شمسی': row.persianDate,
-            'تاریخ و زمان': formatPersianDateTime(row.movement.created_at),
-            'مقدار صادره': row.qty,
-            'واحد': row.unit,
-            'قیمت واحد تومان': row.unitPrice,
-            'مبلغ کل تومان': row.totalPrice,
-            'انبار مبدا': row.warehouseName,
-            'توضیحات': row.movement.notes || row.movement.description || '---'
-          }));
+          const rows = singleCustomerData.rows.map((row, idx) => {
+            const base: Record<string, any> = {
+              'ردیف': idx + 1,
+              'نام کالا': row.productName,
+              'کد کالا SKU': row.productSku,
+              'شماره سند': row.movement.document_number || '---',
+              'شماره بارنامه': row.waybillNo || '---',
+              'تاریخ شمسی': row.persianDate,
+              'تاریخ و زمان': formatPersianDateTime(row.movement.created_at),
+              'مقدار صادره': row.qty,
+              'واحد': row.unit,
+              'انبار مبدا': row.warehouseName,
+              'توضیحات': row.movement.notes || row.movement.description || '---'
+            };
+            if (isFinancialMode) {
+              base['قیمت واحد تومان'] = row.unitPrice;
+              base['مبلغ کل تومان'] = row.totalPrice;
+            }
+            return base;
+          });
 
           const ws = XLSX.utils.json_to_sheet(rows);
           const wb = XLSX.utils.book_new();
@@ -1253,26 +1328,31 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         }
       }
     } else {
-      const rows = filteredKardexData.map((row, idx) => ({
-        'ردیف': idx + 1,
-        'نام کالا': row.productName,
-        'کد کالا': row.productSku,
-        'شماره سند': row.movement.document_number || '---',
-        'شماره بارنامه': row.waybillNo || '---',
-        'طرف حساب': row.partyDisplayName || '---',
-        'تاریخ و زمان': formatPersianDateTime(row.movement.created_at),
-        'تاریخ شمسی': row.persianDate,
-        'نوع عملیات': row.isInput ? 'ورود به انبار' : 'خروج از انبار',
-        'انبار': row.warehouseName,
-        'مقدار ورود': row.qtyIn,
-        'مقدار خروج': row.qtyOut,
-        'مانده لحظه‌ای (Running Balance)': row.runningBalance,
-        'واحد': row.unit,
-        'قیمت واحد تومان': row.unitPrice,
-        'ارزش کل سند تومان': row.totalPrice,
-        'شماره ارجاع': row.movement.reference_id || '---',
-        'شرح عملیات': row.movement.description || row.movement.notes || '---'
-      }));
+      const rows = filteredKardexData.map((row, idx) => {
+        const base: Record<string, any> = {
+          'ردیف': idx + 1,
+          'نام کالا': row.productName,
+          'کد کالا': row.productSku,
+          'شماره سند': row.movement.document_number || '---',
+          'شماره بارنامه': row.waybillNo || '---',
+          'طرف حساب': row.partyDisplayName || '---',
+          'تاریخ و زمان': formatPersianDateTime(row.movement.created_at),
+          'تاریخ شمسی': row.persianDate,
+          'نوع عملیات': row.isInput ? 'ورود به انبار' : 'خروج از انبار',
+          'انبار': row.warehouseName,
+          'مقدار ورود': row.qtyIn,
+          'مقدار خروج': row.qtyOut,
+          'مانده لحظه‌ای (Running Balance)': row.runningBalance,
+          'واحد': row.unit,
+          'شماره ارجاع': row.movement.reference_id || '---',
+          'شرح عملیات': row.movement.description || row.movement.notes || '---'
+        };
+        if (isFinancialMode) {
+          base['قیمت واحد تومان'] = row.unitPrice;
+          base['ارزش کل سند تومان'] = row.totalPrice;
+        }
+        return base;
+      });
 
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
@@ -1379,7 +1459,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         if (reportPartyScope === 'suppliers') {
           exportPayload = {
             report_title: supplierFilterMode === 'ALL_SUPPLIERS'
-              ? 'کاربرگ رسمی گزارش تجمیعی تامین‌کنندگان ام گاز'
+              ? 'کاربرگ رسمی گزارش تجمیعی تامین‌کنندگان'
               : `کاردکس و گردش رسمی تامین‌کننده کالا: ${singleSupplierData.supplier?.name || 'تامین‌کننده'}`,
             company: 'کارخانه تولید/تعمیر انواع سیلندر ام گاز (M.Gas)',
             domain: 'https://anbar.mgas.ir',
@@ -1388,11 +1468,51 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             export_date_persian: formatPersianDateTime(new Date().toISOString()),
             export_date_iso: new Date().toISOString(),
             operator: currentUser.full_name,
-            summary_totals: supplierFilterMode === 'ALL_SUPPLIERS' ? suppliersTotals : {
-              total_quantity: singleSupplierData.totalQty,
-              total_valuation: singleSupplierData.totalVal
-            },
-            data: supplierFilterMode === 'ALL_SUPPLIERS' ? suppliersAggregatedData : singleSupplierData
+            summary_totals: isFinancialMode
+              ? (supplierFilterMode === 'ALL_SUPPLIERS' ? suppliersTotals : {
+                  total_quantity: singleSupplierData.totalQty,
+                  total_valuation: singleSupplierData.totalVal
+                })
+              : (supplierFilterMode === 'ALL_SUPPLIERS' ? {
+                  totalSuppliers: suppliersTotals.totalSuppliers,
+                  totalMovements: suppliersTotals.totalMovements,
+                  totalItemsIn: suppliersTotals.totalItemsIn
+                } : {
+                  total_quantity: singleSupplierData.totalQty,
+                  total_documents: singleSupplierData.rows.length
+                }),
+            data: isFinancialMode
+              ? (supplierFilterMode === 'ALL_SUPPLIERS' ? suppliersAggregatedData : singleSupplierData)
+              : (supplierFilterMode === 'ALL_SUPPLIERS'
+                ? suppliersAggregatedData.map(item => ({
+                    supplier_id: item.supplier.supplier_id,
+                    name: item.supplier.name,
+                    company_name: item.supplier.company_name,
+                    phone: item.supplier.phone,
+                    movementsCount: item.movementsCount,
+                    totalItemsIn: item.totalItemsIn,
+                    lastActivityDate: item.lastActivityDate
+                  }))
+                : {
+                    supplier: singleSupplierData.supplier ? {
+                      supplier_id: singleSupplierData.supplier.supplier_id,
+                      name: singleSupplierData.supplier.name,
+                      company_name: singleSupplierData.supplier.company_name,
+                      phone: singleSupplierData.supplier.phone
+                    } : null,
+                    totalQty: singleSupplierData.totalQty,
+                    rows: singleSupplierData.rows.map(r => ({
+                      productName: r.productName,
+                      productSku: r.productSku,
+                      unit: r.unit,
+                      warehouseName: r.warehouseName,
+                      qty: r.qty,
+                      waybillNo: r.waybillNo,
+                      persianDate: r.persianDate,
+                      document_number: r.movement.document_number,
+                      notes: r.movement.notes || r.movement.description || '---'
+                    }))
+                  })
           };
         } else {
           exportPayload = {
@@ -1406,11 +1526,53 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             export_date_persian: formatPersianDateTime(new Date().toISOString()),
             export_date_iso: new Date().toISOString(),
             operator: currentUser.full_name,
-            summary_totals: customerFilterMode === 'ALL_CUSTOMERS' ? customersTotals : {
-              total_quantity: singleCustomerData.totalQty,
-              total_valuation: singleCustomerData.totalVal
-            },
-            data: customerFilterMode === 'ALL_CUSTOMERS' ? customersAggregatedData : singleCustomerData
+            summary_totals: isFinancialMode
+              ? (customerFilterMode === 'ALL_CUSTOMERS' ? customersTotals : {
+                  total_quantity: singleCustomerData.totalQty,
+                  total_valuation: singleCustomerData.totalVal
+                })
+              : (customerFilterMode === 'ALL_CUSTOMERS' ? {
+                  totalCustomers: customersTotals.totalCustomers,
+                  totalMovements: customersTotals.totalMovements,
+                  totalItemsOut: customersTotals.totalItemsOut
+                } : {
+                  total_quantity: singleCustomerData.totalQty,
+                  total_documents: singleCustomerData.rows.length
+                }),
+            data: isFinancialMode
+              ? (customerFilterMode === 'ALL_CUSTOMERS' ? customersAggregatedData : singleCustomerData)
+              : (customerFilterMode === 'ALL_CUSTOMERS'
+                ? customersAggregatedData.map(item => ({
+                    customer_id: item.customer.customer_id,
+                    name: item.customer.name,
+                    phone: item.customer.phone,
+                    province: item.customer.province,
+                    city: item.customer.city,
+                    movementsCount: item.movementsCount,
+                    totalItemsOut: item.totalItemsOut,
+                    lastActivityDate: item.lastActivityDate
+                  }))
+                : {
+                    customer: singleCustomerData.customer ? {
+                      customer_id: singleCustomerData.customer.customer_id,
+                      name: singleCustomerData.customer.name,
+                      province: singleCustomerData.customer.province,
+                      city: singleCustomerData.customer.city,
+                      phone: singleCustomerData.customer.phone
+                    } : null,
+                    totalQty: singleCustomerData.totalQty,
+                    rows: singleCustomerData.rows.map(r => ({
+                      productName: r.productName,
+                      productSku: r.productSku,
+                      unit: r.unit,
+                      warehouseName: r.warehouseName,
+                      qty: r.qty,
+                      waybillNo: r.waybillNo,
+                      persianDate: r.persianDate,
+                      document_number: r.movement.document_number,
+                      notes: r.movement.notes || r.movement.description || '---'
+                    }))
+                  })
           };
         }
       } else if (reportType === 'customer_valves') {
@@ -1439,7 +1601,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         };
       } else {
         exportPayload = {
-          report_title: reportType === 'inventory' ? 'گزارش رسمی موجودی و ارزش‌گذاری انبارها' : 'کاردکس رسمی گردش اسناد ورود و خروج انبار',
+          report_title: reportType === 'inventory'
+            ? (isFinancialMode ? 'گزارش رسمی موجودی و ارزش‌گذاری انبارها' : 'گزارش رسمی موجودی فیزیکی و نقطه سفارش انبارها')
+            : 'کاردکس رسمی گردش اسناد ورود و خروج انبار',
           company: 'کارخانه تولید/تعمیر انواع سیلندر ام گاز (M.Gas)',
           domain: 'https://anbar.mgas.ir',
           report_type: reportType,
@@ -1447,36 +1611,61 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           export_date_iso: new Date().toISOString(),
           target_warehouse: selectedWarehouseId === 'all' ? 'تمام انبارها' : warehouses.find(w => w.warehouse_id === selectedWarehouseId)?.name,
           operator: currentUser.full_name,
-          summary_totals: reportType === 'inventory' ? inventoryTotals : kardexTotals,
-          data: reportType === 'inventory' ? filteredInventoryData.map((item, idx) => ({
-            row: idx + 1,
-            name: item.product.name,
-            sku: item.product.sku,
-            category: item.categoryName,
-            warehouse: selectedWarehouseId === 'all' ? 'همه انبارها' : warehouses.find(w => w.warehouse_id === selectedWarehouseId)?.name,
-            current_stock: item.currentQty,
-            unit: item.product.unit || 'عدد',
-            min_stock: item.product.min_stock,
-            status: item.isOut ? 'ناموجود' : item.isLow ? 'نقطه سفارش' : 'موجود',
-            purchase_price: item.product.purchase_price,
-            total_valuation: item.totalPurchaseValuation,
-            sale_price: item.product.sale_price
-          })) : filteredKardexData.map((row, idx) => ({
-            row: idx + 1,
-            product_name: row.productName,
-            sku: row.productSku,
-            document_number: row.movement.document_number,
-            date: formatPersianDateTime(row.movement.created_at),
-            operation: row.isInput ? 'ورود به انبار' : 'خروج از انبار',
-            warehouse: row.warehouseName,
-            quantity_in: row.qtyIn,
-            quantity_out: row.qtyOut,
-            unit: row.unit,
-            unit_price: row.unitPrice,
-            total_price: row.totalPrice,
-            reference_id: row.movement.reference_id || '---',
-            description: row.movement.description || '---'
-          }))
+          summary_totals: reportType === 'inventory'
+            ? (isFinancialMode ? inventoryTotals : {
+                totalItems: inventoryTotals.totalItems,
+                totalPhysicalQty: inventoryTotals.totalPhysicalQty,
+                lowStockCount: inventoryTotals.lowStockCount,
+                outOfStockCount: inventoryTotals.outOfStockCount
+              })
+            : (isFinancialMode ? kardexTotals : {
+                recordCount: kardexTotals.recordCount,
+                totalIn: kardexTotals.totalIn,
+                totalOut: kardexTotals.totalOut,
+                netTurnover: kardexTotals.netTurnover
+              }),
+          data: reportType === 'inventory' ? filteredInventoryData.map((item, idx) => {
+            const base: Record<string, any> = {
+              row: idx + 1,
+              name: item.product.name,
+              sku: item.product.sku,
+              category: item.categoryName,
+              warehouse: selectedWarehouseId === 'all' ? item.warehouseDisplayName : warehouses.find(w => w.warehouse_id === selectedWarehouseId)?.name,
+              shelf: item.shelfLocation,
+              current_stock: item.currentQty,
+              unit: item.product.unit || 'عدد',
+              min_stock: item.product.min_stock,
+              variance_from_min: item.varianceFromMin,
+              status: item.isOut ? 'ناموجود' : item.isLow ? 'نقطه سفارش' : 'موجود'
+            };
+            if (isFinancialMode) {
+              base.purchase_price = item.product.purchase_price;
+              base.total_valuation = item.totalPurchaseValuation;
+              base.sale_price = item.product.sale_price;
+            }
+            return base;
+          }) : filteredKardexData.map((row, idx) => {
+            const base: Record<string, any> = {
+              row: idx + 1,
+              product_name: row.productName,
+              sku: row.productSku,
+              document_number: row.movement.document_number,
+              date: formatPersianDateTime(row.movement.created_at),
+              operation: row.isInput ? 'ورود به انبار' : 'خروج از انبار',
+              warehouse: row.warehouseName,
+              quantity_in: row.qtyIn,
+              quantity_out: row.qtyOut,
+              running_balance: row.runningBalance,
+              unit: row.unit,
+              reference_id: row.movement.reference_id || '---',
+              description: row.movement.description || row.movement.notes || '---'
+            };
+            if (isFinancialMode) {
+              base.unit_price = row.unitPrice;
+              base.total_price = row.totalPrice;
+            }
+            return base;
+          })
         };
       }
 
@@ -1553,7 +1742,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       elementId: 'printable-report-section',
       title: `گزارش انبار ام گاز - ${reportTitleText}`,
       paperSize: 'A4',
-      orientation: 'landscape',
+      orientation: 'portrait',
       onComplete: () => {
         setIsPrinting(false);
       }
@@ -1587,7 +1776,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
       await exportElementToPdf('printable-report-section', {
         filename: `gozaresh_${pdfTypeTag}.pdf`,
-        orientation: 'landscape',
+        orientation: 'portrait',
         format: 'a4',
         marginMm: 4
       });
@@ -1642,7 +1831,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             >
               <Boxes className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
               <span className="sm:hidden">موجودی انبارها</span>
-              <span className="hidden sm:inline">گزارش موجودی و ارزش‌گذاری انبارها</span>
+              <span className="hidden sm:inline">
+                {isFinancialMode ? 'گزارش موجودی و ارزش‌گذاری انبارها' : 'گزارش موجودی فیزیکی و نقطه سفارش'}
+              </span>
             </button>
 
             {/* 3. کاردکس و گردش کالا */}
@@ -1657,7 +1848,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             >
               <ArrowLeftRight className="w-3.5 h-3.5 text-indigo-300 shrink-0" />
               <span className="sm:hidden">کاردکس و گردش</span>
-              <span className="hidden sm:inline">گزارش گردش انبار و کاردکس کالا</span>
+              <span className="hidden sm:inline">
+                {isFinancialMode ? 'گزارش گردش انبار و کاردکس کالا' : 'گزارش گردش اسناد و کاردکس تعدادی'}
+              </span>
             </button>
 
             {/* 4. تامین‌کنندگان یا مشتریان */}
@@ -1674,13 +1867,17 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 <>
                   <Truck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                   <span className="sm:hidden">تامین‌کنندگان</span>
-                  <span className="hidden sm:inline">گزارش تامین‌کنندگان و کاردکس کالا</span>
+                  <span className="hidden sm:inline">
+                    {isFinancialMode ? 'گزارش تامین‌کنندگان و کاردکس کالا' : 'گزارش تامین‌کنندگان و کاردکس دریافتی'}
+                  </span>
                 </>
               ) : (
                 <>
                   <Users className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                   <span className="sm:hidden">مشتریان</span>
-                  <span className="hidden sm:inline">گزارش مشتریان و کاردکس فروش</span>
+                  <span className="hidden sm:inline">
+                    {isFinancialMode ? 'گزارش مشتریان و کاردکس فروش' : 'گزارش مشتریان و کاردکس ارسال'}
+                  </span>
                 </>
               )}
             </button>
@@ -1705,9 +1902,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
           <div className="text-[11px] text-slate-400 font-medium px-2 hidden lg:block shrink-0">
             {reportType === 'customer_valves' && 'گزارش تفکیک‌شده ورود، خروج و مانده شیرهای طرف‌حساب‌ها'}
-            {reportType === 'inventory' && 'نمایش تراز فیزیکی و ارزش‌گذاری موجودی انبار'}
-            {reportType === 'kardex' && (reportPartyScope === 'suppliers' ? 'گردش اسناد ورود و خریدهای تامین‌کنندگان' : 'گردش اسناد خروج و فروش‌های مشتریان')}
-            {(reportType === 'party_report' || reportType === 'suppliers') && (reportPartyScope === 'suppliers' ? 'گزارش تجمیعی یا کاردکس تفصیلی تامین‌کنندگان' : 'گزارش تجمیعی یا کاردکس تفصیلی مشتریان')}
+            {reportType === 'inventory' && (isFinancialMode ? 'نمایش تراز فیزیکی و ارزش‌گذاری موجودی انبار' : 'کنترل موجودی فیزیکی، محل قفسه و وضعیت نقطه سفارش')}
+            {reportType === 'kardex' && (reportPartyScope === 'suppliers' ? 'گردش اسناد ورود و تحویل تامین‌کنندگان' : 'گردش اسناد خروج و ارسال مشتریان')}
+            {(reportType === 'party_report' || reportType === 'suppliers') && (reportPartyScope === 'suppliers' ? 'گزارش تجمیعی یا کاردکس تعدادی تامین‌کنندگان' : 'گزارش تجمیعی یا کاردکس تعدادی مشتریان')}
             {reportType === 'live_logs' && 'مانیتورینگ و عیب‌یابی ارتباط زنده پایگاه ابری'}
           </div>
         </div>
@@ -2004,7 +2201,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                   onClick={handlePrint}
                   disabled={isPrinting}
                   className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-black flex items-center gap-2 shadow-md shadow-amber-600/30 transition-all cursor-pointer active:scale-95"
-                  title="ارسال مستقیم جدول شیرآلات مشتریان به چاپگر رسمی"
+                  title="ارسال مستقیم جدول شیرآلات مشتریان به چاپگر رسمی (A4 عمودی)"
                 >
                   <Printer className="w-4 h-4" />
                   <span>{isPrinting ? 'در حال ارسال به چاپگر...' : 'چاپ رسمی جدول شیرآلات (Print)'}</span>
@@ -2016,7 +2213,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                   onClick={handleExportPdf}
                   disabled={isExportingPdf}
                   className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-xs font-black flex items-center gap-2 shadow-md shadow-teal-600/30 transition-all cursor-pointer active:scale-95"
-                  title="دانلود مستقیم جدول شیرآلات در قالب فایل استاندارد PDF A4 افقی"
+                  title="دانلود مستقیم جدول شیرآلات در قالب فایل استاندارد PDF A4 عمودی"
                 >
                   <Download className={`w-4 h-4 ${isExportingPdf ? 'animate-bounce' : ''}`} />
                   <span>{isExportingPdf ? 'در حال تولید...' : 'خروجی PDF شیرآلات'}</span>
@@ -2562,7 +2759,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                   onClick={handlePrint}
                   disabled={isPrinting}
                   className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-black flex items-center gap-2 shadow-md shadow-indigo-600/30 transition-all cursor-pointer active:scale-95"
-                  title="ارسال مستقیم جدول فیلترشده به چاپگر رسمی یا ذخیره در قالب سند چاپی"
+                  title="ارسال مستقیم جدول فیلترشده به چاپگر رسمی یا ذخیره در قالب سند چاپی (A4 عمودی)"
                 >
                   <Printer className="w-4 h-4" />
                   <span>{isPrinting ? 'در حال ارسال به چاپگر...' : 'چاپ رسمی جدول (Print)'}</span>
@@ -2574,7 +2771,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                   onClick={handleExportPdf}
                   disabled={isExportingPdf}
                   className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-xs font-black flex items-center gap-2 shadow-md shadow-teal-600/30 transition-all cursor-pointer active:scale-95"
-                  title="دانلود مستقیم جدول فیلترشده با قالب استاندارد PDF A4 افقی"
+                  title="دانلود مستقیم جدول فیلترشده با قالب استاندارد PDF A4 عمودی"
                 >
                   <Download className={`w-4 h-4 ${isExportingPdf ? 'animate-bounce' : ''}`} />
                   <span>{isExportingPdf ? 'در حال تولید...' : 'خروجی PDF'}</span>
@@ -2651,7 +2848,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                     ? 'کاربرگ رسمی خلاصه تراز و گردش کل شیرهای مشتریان'
                     : 'کاربرگ رسمی ریز اسناد و حواله‌های گردش شیرآلات مشتریان'
                   : reportType === 'inventory'
-                  ? 'کاربرگ رسمی موجودی و ارزش‌گذاری انبارها'
+                  ? (isFinancialMode ? 'کاربرگ رسمی موجودی و ارزش‌گذاری انبارها' : 'کاربرگ رسمی موجودی فیزیکی و کنترل انبارها')
                   : reportType === 'kardex'
                   ? reportPartyScope === 'suppliers'
                     ? 'کاردکس رسمی گردش اسناد ورود و خروج انبار (انحصاراً تامین‌کنندگان)'
@@ -2788,21 +2985,133 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           </div>
         )}
 
+        {/* Operational KPI Summary Bar (Zero Monetary Data) */}
+        {!isFinancialMode && reportType !== 'live_logs' && (
+          <div id="report-kpi-summary" className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+            {reportType === 'inventory' && (
+              <>
+                <div className="bg-slate-950/70 print:bg-slate-50 border border-slate-800 print:border-slate-400 rounded-xl p-2.5 flex items-center justify-between">
+                  <span className="text-slate-400 print:text-black font-bold">تعداد کل اقلام</span>
+                  <div className="font-mono font-black text-sm text-indigo-300 print:text-black">{toPersianDigits(inventoryTotals.totalItems)}</div>
+                </div>
+                <div className="bg-slate-950/70 print:bg-slate-50 border border-slate-800 print:border-slate-400 rounded-xl p-2.5 flex items-center justify-between">
+                  <span className="text-slate-400 print:text-black font-bold">مجموع موجودی فیزیکی</span>
+                  <div className="font-mono font-black text-sm text-emerald-400 print:text-black">{formatNumberFa(inventoryTotals.totalPhysicalQty)}</div>
+                </div>
+                <div className="bg-slate-950/70 print:bg-slate-50 border border-slate-800 print:border-slate-400 rounded-xl p-2.5 flex items-center justify-between">
+                  <span className="text-slate-400 print:text-black font-bold">زیر نقطه سفارش</span>
+                  <div className="font-mono font-black text-sm text-amber-400 print:text-black">{toPersianDigits(inventoryTotals.lowStockCount)}</div>
+                </div>
+                <div className="bg-slate-950/70 print:bg-slate-50 border border-slate-800 print:border-slate-400 rounded-xl p-2.5 flex items-center justify-between">
+                  <span className="text-slate-400 print:text-black font-bold">کالاهای ناموجود</span>
+                  <div className="font-mono font-black text-sm text-rose-400 print:text-black">{toPersianDigits(inventoryTotals.outOfStockCount)}</div>
+                </div>
+              </>
+            )}
+
+            {reportType === 'kardex' && (
+              <>
+                <div className="bg-slate-950/70 print:bg-slate-50 border border-slate-800 print:border-slate-400 rounded-xl p-2.5 flex items-center justify-between">
+                  <span className="text-slate-400 print:text-black font-bold">تعداد اسناد گردش</span>
+                  <div className="font-mono font-black text-sm text-indigo-300 print:text-black">{toPersianDigits(kardexTotals.recordCount)}</div>
+                </div>
+                <div className="bg-slate-950/70 print:bg-slate-50 border border-slate-800 print:border-slate-400 rounded-xl p-2.5 flex items-center justify-between">
+                  <span className="text-slate-400 print:text-black font-bold">مجموع ورودی (+)</span>
+                  <div className="font-mono font-black text-sm text-emerald-400 print:text-black">{formatNumberFa(kardexTotals.totalIn)}</div>
+                </div>
+                <div className="bg-slate-950/70 print:bg-slate-50 border border-slate-800 print:border-slate-400 rounded-xl p-2.5 flex items-center justify-between">
+                  <span className="text-slate-400 print:text-black font-bold">مجموع خروجی (-)</span>
+                  <div className="font-mono font-black text-sm text-rose-400 print:text-black">{formatNumberFa(kardexTotals.totalOut)}</div>
+                </div>
+                <div className="bg-slate-950/70 print:bg-slate-50 border border-slate-800 print:border-slate-400 rounded-xl p-2.5 flex items-center justify-between">
+                  <span className="text-slate-400 print:text-black font-bold">خالص گردش تعدادی</span>
+                  <div className="font-mono font-black text-sm text-amber-400 print:text-black" dir="ltr">{formatNumberFa(kardexTotals.netTurnover)}</div>
+                </div>
+              </>
+            )}
+
+            {reportType === 'customer_valves' && (
+              <>
+                <div className="bg-slate-950/70 print:bg-slate-50 border border-slate-800 print:border-slate-400 rounded-xl p-2.5 flex items-center justify-between">
+                  <span className="text-slate-400 print:text-black font-bold">ورود کل شیرها</span>
+                  <div className="font-mono font-black text-sm text-emerald-400 print:text-black">{toPersianDigits(customerValveReportData.totals.totalValvesIn)}</div>
+                </div>
+                <div className="bg-slate-950/70 print:bg-slate-50 border border-slate-800 print:border-slate-400 rounded-xl p-2.5 flex items-center justify-between">
+                  <span className="text-slate-400 print:text-black font-bold">خروج کل شیرها</span>
+                  <div className="font-mono font-black text-sm text-rose-400 print:text-black">{toPersianDigits(customerValveReportData.totals.totalValvesOut)}</div>
+                </div>
+                <div className="bg-slate-950/70 print:bg-slate-50 border border-slate-800 print:border-slate-400 rounded-xl p-2.5 flex items-center justify-between">
+                  <span className="text-slate-400 print:text-black font-bold">تراز مانده شیر نو</span>
+                  <div className="font-mono font-black text-sm text-indigo-300 print:text-black">{toPersianDigits(customerValveReportData.totals.totalNewValveBalance)}</div>
+                </div>
+                <div className="bg-slate-950/70 print:bg-slate-50 border border-slate-800 print:border-slate-400 rounded-xl p-2.5 flex items-center justify-between">
+                  <span className="text-slate-400 print:text-black font-bold">تراز مانده شیر کهنه</span>
+                  <div className="font-mono font-black text-sm text-amber-400 print:text-black">{toPersianDigits(customerValveReportData.totals.totalUsedValveBalance)}</div>
+                </div>
+              </>
+            )}
+
+            {(reportType === 'party_report' || reportType === 'suppliers') && (
+              reportPartyScope === 'suppliers' ? (
+                <>
+                  <div className="bg-slate-950/70 print:bg-slate-50 border border-slate-800 print:border-slate-400 rounded-xl p-2.5 flex items-center justify-between">
+                    <span className="text-slate-400 print:text-black font-bold">تعداد تامین‌کنندگان</span>
+                    <div className="font-mono font-black text-sm text-emerald-400 print:text-black">{toPersianDigits(suppliersTotals.totalSuppliers)}</div>
+                  </div>
+                  <div className="bg-slate-950/70 print:bg-slate-50 border border-slate-800 print:border-slate-400 rounded-xl p-2.5 flex items-center justify-between">
+                    <span className="text-slate-400 print:text-black font-bold">اسناد و محموله‌ها</span>
+                    <div className="font-mono font-black text-sm text-indigo-300 print:text-black">{toPersianDigits(supplierFilterMode === 'ALL_SUPPLIERS' ? suppliersTotals.totalMovements : singleSupplierData.rows.length)}</div>
+                  </div>
+                  <div className="bg-slate-950/70 print:bg-slate-50 border border-slate-800 print:border-slate-400 rounded-xl p-2.5 flex items-center justify-between sm:col-span-2">
+                    <span className="text-slate-400 print:text-black font-bold">مجموع اقلام وارده به انبار</span>
+                    <div className="font-mono font-black text-sm text-emerald-400 print:text-black">{formatNumberFa(supplierFilterMode === 'ALL_SUPPLIERS' ? suppliersTotals.totalItemsIn : singleSupplierData.totalQty)} قلم</div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="bg-slate-950/70 print:bg-slate-50 border border-slate-800 print:border-slate-400 rounded-xl p-2.5 flex items-center justify-between">
+                    <span className="text-slate-400 print:text-black font-bold">تعداد مشتریان</span>
+                    <div className="font-mono font-black text-sm text-amber-400 print:text-black">{toPersianDigits(customersTotals.totalCustomers)}</div>
+                  </div>
+                  <div className="bg-slate-950/70 print:bg-slate-50 border border-slate-800 print:border-slate-400 rounded-xl p-2.5 flex items-center justify-between">
+                    <span className="text-slate-400 print:text-black font-bold">اسناد و حواله‌ها</span>
+                    <div className="font-mono font-black text-sm text-indigo-300 print:text-black">{toPersianDigits(customerFilterMode === 'ALL_CUSTOMERS' ? customersTotals.totalMovements : singleCustomerData.rows.length)}</div>
+                  </div>
+                  <div className="bg-slate-950/70 print:bg-slate-50 border border-slate-800 print:border-slate-400 rounded-xl p-2.5 flex items-center justify-between sm:col-span-2">
+                    <span className="text-slate-400 print:text-black font-bold">مجموع اقلام صادره از انبار</span>
+                    <div className="font-mono font-black text-sm text-rose-400 print:text-black">{formatNumberFa(customerFilterMode === 'ALL_CUSTOMERS' ? customersTotals.totalItemsOut : singleCustomerData.totalQty)} قلم</div>
+                  </div>
+                </>
+              )
+            )}
+          </div>
+        )}
+
         {/* 1. Inventory Report Table */}
         {reportType === 'inventory' && (
           <div className="overflow-x-auto -mx-2 sm:mx-0">
             <table className="w-full min-w-[760px] text-right text-xs divide-y divide-slate-800 print:divide-black print:text-[13px] table-fixed">
               <colgroup>
                 <col style={{ width: '4.5%' }} />
-                <col style={{ width: '25.5%' }} />
+                <col style={{ width: isFinancialMode ? '25.5%' : '26%' }} />
                 <col style={{ width: '10%' }} />
                 <col style={{ width: '11%' }} />
+                {!isFinancialMode && <col style={{ width: '12.5%' }} />}
                 <col style={{ width: '8%' }} />
                 <col style={{ width: '6%' }} />
-                <col style={{ width: '8%' }} />
-                <col style={{ width: '9%' }} />
-                <col style={{ width: '9%' }} />
-                <col style={{ width: '9%' }} />
+                <col style={{ width: isFinancialMode ? '8%' : '7%' }} />
+                {isFinancialMode ? (
+                  <>
+                    <col style={{ width: '9%' }} />
+                    <col style={{ width: '9%' }} />
+                    <col style={{ width: '9%' }} />
+                  </>
+                ) : (
+                  <>
+                    <col style={{ width: '7%' }} />
+                    <col style={{ width: '8%' }} />
+                  </>
+                )}
               </colgroup>
               <thead className="bg-slate-950/60 print:bg-slate-100 text-slate-400 print:text-black font-bold">
                 <tr>
@@ -2810,12 +3119,18 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                   <th className="p-2 font-bold text-slate-100 print:text-black">نام و مشخصات کالا</th>
                   <th className="p-2 text-center">کد کالا</th>
                   <th className="p-2">دسته‌بندی</th>
+                  {!isFinancialMode && <th className="p-2 text-center">انبار و قفسه</th>}
                   <th className="p-2 text-center">موجودی</th>
                   <th className="p-2 text-center">واحد</th>
                   <th className="p-2 text-center">نقطه سفارش</th>
+                  {!isFinancialMode && <th className="p-2 text-center">تراز تا حداقل</th>}
                   <th className="p-2 text-center font-bold">وضعیت</th>
-                  <th className="p-2 text-left">قیمت خرید</th>
-                  <th className="p-2 text-left">ارزش کل موجودی</th>
+                  {isFinancialMode && (
+                    <>
+                      <th className="p-2 text-left">قیمت خرید</th>
+                      <th className="p-2 text-left">ارزش کل موجودی</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 print:divide-slate-300">
@@ -2843,6 +3158,12 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                       <td className="p-2 text-slate-400 print:text-black truncate">
                         {item.categoryName}
                       </td>
+                      {!isFinancialMode && (
+                        <td className="p-2 text-center text-slate-300 print:text-black">
+                          <span>{item.warehouseDisplayName}</span>
+                          <span className="font-mono font-bold text-indigo-300 print:text-black mx-1">({item.shelfLocation})</span>
+                        </td>
+                      )}
                       <td className="p-2 text-center font-mono font-bold text-slate-100 print:text-black">
                         {toPersianDigits(item.currentQty)}
                       </td>
@@ -2852,6 +3173,13 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                       <td className="p-2 text-center font-mono text-slate-400 print:text-black">
                         {toPersianDigits(item.product.min_stock)}
                       </td>
+                      {!isFinancialMode && (
+                        <td className={`p-2 text-center font-mono font-bold print:text-black ${
+                          item.varianceFromMin < 0 ? 'text-rose-400' : item.varianceFromMin === 0 ? 'text-amber-400' : 'text-emerald-400'
+                        }`} dir="ltr">
+                          {item.varianceFromMin > 0 ? `+${toPersianDigits(item.varianceFromMin)}` : toPersianDigits(item.varianceFromMin)}
+                        </td>
+                      )}
                       <td className="p-2 text-center">
                         {item.isOut ? (
                           <span className="inline-flex items-center justify-center min-w-[70px] text-[10.5px] print:text-[12px] font-bold px-2 py-0.5 rounded-md bg-rose-950/80 text-rose-300 border border-rose-800 print:bg-transparent print:border-none print:shadow-none print:p-0 print:rounded-none print:text-black">
@@ -2867,26 +3195,30 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                           </span>
                         )}
                       </td>
-                      <td className="p-2 text-left">
-                        <div className="flex items-center justify-end gap-1" dir="ltr">
-                          <span className="font-mono tabular-nums font-bold text-slate-200 print:text-black text-xs">
-                            {item.product.purchase_price ? formatNumberFa(item.product.purchase_price) : '0'}
-                          </span>
-                          <span className="text-[10px] text-slate-400 print:text-slate-600 font-sans">
-                            تومان
-                          </span>
-                        </div>
-                      </td>
-                      <td className="p-2 text-left">
-                        <div className="flex items-center justify-end gap-1" dir="ltr">
-                          <span className="font-mono tabular-nums font-black text-emerald-400 print:text-black text-xs">
-                            {formatNumberFa(item.totalPurchaseValuation)}
-                          </span>
-                          <span className="text-[10px] text-slate-400 print:text-slate-600 font-sans">
-                            تومان
-                          </span>
-                        </div>
-                      </td>
+                      {isFinancialMode && (
+                        <>
+                          <td className="p-2 text-left">
+                            <div className="flex items-center justify-end gap-1" dir="ltr">
+                              <span className="font-mono tabular-nums font-bold text-slate-200 print:text-black text-xs">
+                                {item.product.purchase_price ? formatNumberFa(item.product.purchase_price) : '0'}
+                              </span>
+                              <span className="text-[10px] text-slate-400 print:text-slate-600 font-sans">
+                                تومان
+                              </span>
+                            </div>
+                          </td>
+                          <td className="p-2 text-left">
+                            <div className="flex items-center justify-end gap-1" dir="ltr">
+                              <span className="font-mono tabular-nums font-black text-emerald-400 print:text-black text-xs">
+                                {formatNumberFa(item.totalPurchaseValuation)}
+                              </span>
+                              <span className="text-[10px] text-slate-400 print:text-slate-600 font-sans">
+                                تومان
+                              </span>
+                            </div>
+                          </td>
+                        </>
+                      )}
                     </tr>
                   ))
                 )}
@@ -2894,23 +3226,31 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               {filteredInventoryData.length > 0 && (
                 <tfoot className="bg-slate-950/90 print:bg-slate-200 font-bold border-t-2 border-slate-700 print:border-black">
                   <tr>
-                    <td colSpan={4} className="p-3 text-slate-200 print:text-black font-bold">
-                      مجموع کل اقلام گزارش:
+                    <td colSpan={isFinancialMode ? 4 : 5} className="p-3 text-slate-200 print:text-black font-bold">
+                      مجموع کل اقلام گزارش ({toPersianDigits(inventoryTotals.totalItems)} قلم):
                     </td>
                     <td className="p-3 text-center font-mono font-black text-indigo-300 print:text-black">
                       {formatNumberFa(inventoryTotals.totalPhysicalQty)}
                     </td>
-                    <td colSpan={4}></td>
-                    <td className="p-3 text-left">
-                      <div className="flex items-center justify-end gap-1" dir="ltr">
-                        <span className="font-mono tabular-nums font-black text-emerald-400 print:text-black text-sm">
-                          {formatNumberFa(inventoryTotals.totalPurchaseVal)}
-                        </span>
-                        <span className="text-xs text-slate-300 print:text-black font-sans font-bold">
-                          تومان
-                        </span>
-                      </div>
-                    </td>
+                    {isFinancialMode ? (
+                      <>
+                        <td colSpan={4}></td>
+                        <td className="p-3 text-left">
+                          <div className="flex items-center justify-end gap-1" dir="ltr">
+                            <span className="font-mono tabular-nums font-black text-emerald-400 print:text-black text-sm">
+                              {formatNumberFa(inventoryTotals.totalPurchaseVal)}
+                            </span>
+                            <span className="text-xs text-slate-300 print:text-black font-sans font-bold">
+                              تومان
+                            </span>
+                          </div>
+                        </td>
+                      </>
+                    ) : (
+                      <td colSpan={4} className="p-3 text-center text-slate-300 print:text-black font-bold">
+                        نقطه سفارش: {toPersianDigits(inventoryTotals.lowStockCount)} قلم | ناموجود: {toPersianDigits(inventoryTotals.outOfStockCount)} قلم
+                      </td>
+                    )}
                   </tr>
                 </tfoot>
               )}
@@ -2924,7 +3264,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             <table className="w-full min-w-[980px] text-right text-xs divide-y divide-slate-800 print:divide-black print:text-[13px] table-fixed">
               <colgroup>
                 <col style={{ width: '3.5%' }} />
-                <col style={{ width: '17%' }} />
+                <col style={{ width: '15.5%' }} />
                 <col style={{ width: '7.5%' }} />
                 <col style={{ width: '7.5%' }} />
                 <col style={{ width: '7.5%' }} />
@@ -2951,7 +3291,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                   <th className="p-2 text-center">ورود</th>
                   <th className="p-2 text-center">خروج</th>
                   <th className="p-2 text-center text-amber-300 font-bold">مانده لحظه‌ای</th>
-                  <th className="p-2 text-left">مبلغ کل</th>
+                  <th className={isFinancialMode ? 'p-2 text-left' : 'p-2 text-center'}>
+                    {isFinancialMode ? 'مبلغ کل' : 'واحد / شرح'}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 print:divide-slate-300">
@@ -2999,16 +3341,22 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                       <td className="p-2 text-center font-mono font-black text-amber-300 print:text-black bg-amber-950/20 rounded">
                         {toPersianDigits(row.runningBalance)}
                       </td>
-                      <td className="p-2 text-left">
-                        <div className="flex items-center justify-end gap-1" dir="ltr">
-                          <span className="font-mono tabular-nums font-bold text-slate-200 print:text-black text-xs">
-                            {formatNumberFa(row.totalPrice)}
-                          </span>
-                          <span className="text-[10px] text-slate-400 print:text-slate-600 font-sans">
-                            تومان
-                          </span>
-                        </div>
-                      </td>
+                      {isFinancialMode ? (
+                        <td className="p-2 text-left">
+                          <div className="flex items-center justify-end gap-1" dir="ltr">
+                            <span className="font-mono tabular-nums font-bold text-slate-200 print:text-black text-xs">
+                              {formatNumberFa(row.totalPrice)}
+                            </span>
+                            <span className="text-[10px] text-slate-400 print:text-slate-600 font-sans">
+                              تومان
+                            </span>
+                          </div>
+                        </td>
+                      ) : (
+                        <td className="p-2 text-center text-slate-300 print:text-black truncate" title={row.movement.notes || row.movement.description || row.unit}>
+                          {row.movement.notes || row.movement.description || row.unit}
+                        </td>
+                      )}
                     </tr>
                   ))
                 )}
@@ -3028,16 +3376,22 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                     <td className="p-3 text-center font-mono font-black text-amber-400 print:text-black">
                       -
                     </td>
-                    <td className="p-3 text-left">
-                      <div className="flex items-center justify-end gap-1" dir="ltr">
-                        <span className="font-mono tabular-nums font-black text-cyan-300 print:text-black text-sm">
-                          {formatNumberFa(kardexTotals.totalValuation)}
-                        </span>
-                        <span className="text-xs text-slate-300 print:text-black font-sans font-bold">
-                          تومان
-                        </span>
-                      </div>
-                    </td>
+                    {isFinancialMode ? (
+                      <td className="p-3 text-left">
+                        <div className="flex items-center justify-end gap-1" dir="ltr">
+                          <span className="font-mono tabular-nums font-black text-cyan-300 print:text-black text-sm">
+                            {formatNumberFa(kardexTotals.totalValuation)}
+                          </span>
+                          <span className="text-xs text-slate-300 print:text-black font-sans font-bold">
+                            تومان
+                          </span>
+                        </div>
+                      </td>
+                    ) : (
+                      <td className="p-3 text-center font-mono font-black text-cyan-300 print:text-black" dir="ltr">
+                        خالص: {formatNumberFa(kardexTotals.netTurnover)}
+                      </td>
+                    )}
                   </tr>
                 </tfoot>
               )}
@@ -3130,14 +3484,22 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                     <table className="w-full min-w-[850px] text-right text-xs divide-y divide-slate-800 print:divide-black print:text-[13px] table-fixed">
                       <colgroup>
                         <col style={{ width: '4%' }} />
-                        <col style={{ width: '18%' }} />
-                        <col style={{ width: '14%' }} />
-                        <col style={{ width: '11%' }} />
-                        <col style={{ width: '10%' }} />
-                        <col style={{ width: '13%' }} />
+                        <col style={{ width: isFinancialMode ? '16%' : '20%' }} />
+                        <col style={{ width: isFinancialMode ? '12%' : '15%' }} />
+                        <col style={{ width: isFinancialMode ? '10%' : '11%' }} />
+                        {isFinancialMode && <col style={{ width: '9%' }} />}
+                        <col style={{ width: isFinancialMode ? '11%' : '15%' }} />
+                        {!isFinancialMode && <col style={{ width: '8%' }} />}
                         <col style={{ width: '8%' }} />
-                        <col style={{ width: '11%' }} />
-                        <col style={{ width: '11%' }} />
+                        {isFinancialMode ? (
+                          <>
+                            <col style={{ width: '10%' }} />
+                            <col style={{ width: '10%' }} />
+                          </>
+                        ) : (
+                          <col style={{ width: '9%' }} />
+                        )}
+                        <col style={{ width: '10%' }} className="print:hidden" />
                       </colgroup>
                       <thead className="bg-slate-950/60 print:bg-slate-100 text-slate-400 print:text-black font-bold">
                         <tr>
@@ -3145,18 +3507,25 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                           <th className="p-2 font-bold text-slate-100 print:text-black">نام تامین‌کننده</th>
                           <th className="p-2">عنوان شرکت / بازرگانی</th>
                           <th className="p-2 text-center">شماره تماس</th>
-                          <th className="p-2 text-center">کد اقتصادی</th>
+                          {isFinancialMode && <th className="p-2 text-center">کد اقتصادی</th>}
                           <th className="p-2">استان و شهر</th>
+                          {!isFinancialMode && <th className="p-2 text-center">تعداد اسناد</th>}
                           <th className="p-2 text-center">تعداد اقلام وارده</th>
-                          <th className="p-2 text-left">ارزش کل خریدهای ثبتی</th>
-                          <th className="p-2 text-left">مانده حساب فعلی</th>
+                          {isFinancialMode ? (
+                            <>
+                              <th className="p-2 text-left">ارزش کل خریدهای ثبتی</th>
+                              <th className="p-2 text-left">مانده حساب فعلی</th>
+                            </>
+                          ) : (
+                            <th className="p-2 text-center">آخرین تحویل</th>
+                          )}
                           <th className="p-2 text-center print:hidden">عملیات کاردکس</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/60 print:divide-slate-300">
                         {suppliersAggregatedData.length === 0 ? (
                           <tr>
-                            <td colSpan={10} className="p-8 text-center text-slate-400">
+                            <td colSpan={isFinancialMode ? 10 : 9} className="p-8 text-center text-slate-400">
                               هیچ تامین‌کننده‌ای در سیستم ثبت نشده است.
                             </td>
                           </tr>
@@ -3178,35 +3547,50 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                               <td className="p-2 text-center font-mono text-slate-400 print:text-black" dir="ltr">
                                 {item.supplier.phone ? toPersianDigits(item.supplier.phone) : '---'}
                               </td>
-                              <td className="p-2 text-center font-mono text-slate-400 print:text-black">
-                                {item.supplier.economic_code ? toPersianDigits(item.supplier.economic_code) : '---'}
-                              </td>
+                              {isFinancialMode && (
+                                <td className="p-2 text-center font-mono text-slate-400 print:text-black">
+                                  {item.supplier.economic_code ? toPersianDigits(item.supplier.economic_code) : '---'}
+                                </td>
+                              )}
                               <td className="p-2 text-slate-400 print:text-black truncate">
                                 {item.supplier.province ? `${item.supplier.province} - ${item.supplier.city || ''}` : '---'}
                               </td>
+                              {!isFinancialMode && (
+                                <td className="p-2 text-center font-mono font-bold text-indigo-300 print:text-black">
+                                  {toPersianDigits(item.movementsCount)}
+                                </td>
+                              )}
                               <td className="p-2 text-center font-mono font-bold text-slate-100 print:text-black">
                                 {toPersianDigits(item.totalItemsIn)}
                               </td>
-                              <td className="p-2 text-left">
-                                <div className="flex items-center justify-end gap-1" dir="ltr">
-                                  <span className="font-mono tabular-nums font-black text-emerald-400 print:text-black text-xs">
-                                    {formatNumberFa(item.totalValuation)}
-                                  </span>
-                                  <span className="text-[10px] text-slate-400 print:text-slate-600 font-sans">
-                                    تومان
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="p-2 text-left">
-                                <div className="flex items-center justify-end gap-1" dir="ltr">
-                                  <span className="font-mono tabular-nums font-black text-amber-400 print:text-black text-xs">
-                                    {formatNumberFa(item.currentBalance)}
-                                  </span>
-                                  <span className="text-[10px] text-slate-400 print:text-slate-600 font-sans">
-                                    تومان
-                                  </span>
-                                </div>
-                              </td>
+                              {isFinancialMode ? (
+                                <>
+                                  <td className="p-2 text-left">
+                                    <div className="flex items-center justify-end gap-1" dir="ltr">
+                                      <span className="font-mono tabular-nums font-black text-emerald-400 print:text-black text-xs">
+                                        {formatNumberFa(item.totalValuation)}
+                                      </span>
+                                      <span className="text-[10px] text-slate-400 print:text-slate-600 font-sans">
+                                        تومان
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="p-2 text-left">
+                                    <div className="flex items-center justify-end gap-1" dir="ltr">
+                                      <span className="font-mono tabular-nums font-black text-amber-400 print:text-black text-xs">
+                                        {formatNumberFa(item.currentBalance)}
+                                      </span>
+                                      <span className="text-[10px] text-slate-400 print:text-slate-600 font-sans">
+                                        تومان
+                                      </span>
+                                    </div>
+                                  </td>
+                                </>
+                              ) : (
+                                <td className="p-2 text-center font-mono text-slate-300 print:text-black whitespace-nowrap">
+                                  {item.lastActivityDate ? toPersianDigits(getPersianDate(item.lastActivityDate)) : '---'}
+                                </td>
+                              )}
                               <td className="p-2 text-center print:hidden">
                                 <button
                                   type="button"
@@ -3228,32 +3612,43 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                       {suppliersAggregatedData.length > 0 && (
                         <tfoot className="bg-slate-950/90 print:bg-slate-200 font-bold border-t-2 border-slate-700 print:border-black">
                           <tr>
-                            <td colSpan={6} className="p-3 text-slate-200 print:text-black font-bold">
+                            <td colSpan={isFinancialMode ? 6 : 5} className="p-3 text-slate-200 print:text-black font-bold">
                               مجموع کل تامین‌کنندگان ({toPersianDigits(suppliersTotals.totalSuppliers)} شرکت):
                             </td>
+                            {!isFinancialMode && (
+                              <td className="p-3 text-center font-mono font-black text-indigo-300 print:text-black">
+                                {formatNumberFa(suppliersTotals.totalMovements)} سند
+                              </td>
+                            )}
                             <td className="p-3 text-center font-mono font-black text-indigo-300 print:text-black">
                               {formatNumberFa(suppliersTotals.totalItemsIn)}
                             </td>
-                            <td className="p-3 text-left">
-                              <div className="flex items-center justify-end gap-1" dir="ltr">
-                                <span className="font-mono tabular-nums font-black text-emerald-400 print:text-black text-sm">
-                                  {formatNumberFa(suppliersTotals.totalValuation)}
-                                </span>
-                                <span className="text-xs text-slate-300 print:text-black font-sans font-bold">
-                                  تومان
-                                </span>
-                              </div>
-                            </td>
-                            <td className="p-3 text-left">
-                              <div className="flex items-center justify-end gap-1" dir="ltr">
-                                <span className="font-mono tabular-nums font-black text-amber-400 print:text-black text-sm">
-                                  {formatNumberFa(suppliersTotals.totalBalance)}
-                                </span>
-                                <span className="text-xs text-slate-300 print:text-black font-sans font-bold">
-                                  تومان
-                                </span>
-                              </div>
-                            </td>
+                            {isFinancialMode ? (
+                              <>
+                                <td className="p-3 text-left">
+                                  <div className="flex items-center justify-end gap-1" dir="ltr">
+                                    <span className="font-mono tabular-nums font-black text-emerald-400 print:text-black text-sm">
+                                      {formatNumberFa(suppliersTotals.totalValuation)}
+                                    </span>
+                                    <span className="text-xs text-slate-300 print:text-black font-sans font-bold">
+                                      تومان
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="p-3 text-left">
+                                  <div className="flex items-center justify-end gap-1" dir="ltr">
+                                    <span className="font-mono tabular-nums font-black text-amber-400 print:text-black text-sm">
+                                      {formatNumberFa(suppliersTotals.totalBalance)}
+                                    </span>
+                                    <span className="text-xs text-slate-300 print:text-black font-sans font-bold">
+                                      تومان
+                                    </span>
+                                  </div>
+                                </td>
+                              </>
+                            ) : (
+                              <td></td>
+                            )}
                             <td className="print:hidden"></td>
                           </tr>
                         </tfoot>
@@ -3277,10 +3672,19 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                           <span className="text-slate-400 block font-medium">شماره تماس:</span>
                           <span className="font-mono font-bold" dir="ltr">{toPersianDigits(singleSupplierData.supplier.phone || '---')}</span>
                         </div>
-                        <div>
-                          <span className="text-slate-400 block font-medium">مانده حساب:</span>
-                          <span className="font-mono font-bold text-amber-400">{formatCurrencyToman(singleSupplierData.supplier.current_balance)}</span>
-                        </div>
+                        {isFinancialMode ? (
+                          <div>
+                            <span className="text-slate-400 block font-medium">مانده حساب:</span>
+                            <span className="font-mono font-bold text-amber-400">{formatCurrencyToman(singleSupplierData.supplier.current_balance)}</span>
+                          </div>
+                        ) : (
+                          <div>
+                            <span className="text-slate-400 block font-medium">مجموع اقلام دریافتی:</span>
+                            <span className="font-mono font-bold text-emerald-400 print:text-black">
+                              {formatNumberFa(singleSupplierData.totalQty)} قلم ({toPersianDigits(singleSupplierData.rows.length)} سند)
+                            </span>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -3288,16 +3692,25 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                       <table className="w-full min-w-[950px] text-right text-xs divide-y divide-slate-800 print:divide-black print:text-[13px] table-fixed">
                         <colgroup>
                           <col style={{ width: '4%' }} />
-                          <col style={{ width: '18%' }} />
+                          <col style={{ width: isFinancialMode ? '18%' : '21%' }} />
                           <col style={{ width: '8.5%' }} />
                           <col style={{ width: '8.5%' }} />
                           <col style={{ width: '8.5%' }} />
                           <col style={{ width: '9%' }} />
                           <col style={{ width: '6.5%' }} />
                           <col style={{ width: '5%' }} />
-                          <col style={{ width: '11%' }} />
-                          <col style={{ width: '12%' }} />
-                          <col style={{ width: '9%' }} />
+                          {isFinancialMode ? (
+                            <>
+                              <col style={{ width: '11%' }} />
+                              <col style={{ width: '12%' }} />
+                              <col style={{ width: '9%' }} />
+                            </>
+                          ) : (
+                            <>
+                              <col style={{ width: '12%' }} />
+                              <col style={{ width: '17%' }} />
+                            </>
+                          )}
                         </colgroup>
                         <thead className="bg-slate-950/60 print:bg-slate-100 text-slate-400 print:text-black font-bold">
                           <tr>
@@ -3309,15 +3722,20 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                             <th className="p-2 text-center">تاریخ ثبت</th>
                             <th className="p-2 text-center">مقدار وارده</th>
                             <th className="p-2 text-center">واحد</th>
-                            <th className="p-2 text-left">قیمت واحد خرید</th>
-                            <th className="p-2 text-left">ارزش کل سند</th>
+                            {isFinancialMode && (
+                              <>
+                                <th className="p-2 text-left">قیمت واحد خرید</th>
+                                <th className="p-2 text-left">ارزش کل سند</th>
+                              </>
+                            )}
                             <th className="p-2">انبار مقصد</th>
+                            {!isFinancialMode && <th className="p-2">شرح / توضیحات محموله</th>}
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800/60 print:divide-slate-300">
                           {singleSupplierData.rows.length === 0 ? (
                             <tr>
-                              <td colSpan={11} className="p-8 text-center text-slate-400">
+                              <td colSpan={isFinancialMode ? 11 : 10} className="p-8 text-center text-slate-400">
                                 هیچ کالای وارده یا سند گردشی برای تامین‌کننده انتخابی یافت نشد.
                               </td>
                             </tr>
@@ -3351,29 +3769,38 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                                 <td className="p-2 text-center text-slate-400 print:text-black">
                                   {row.unit}
                                 </td>
-                                <td className="p-2 text-left">
-                                  <div className="flex items-center justify-end gap-1" dir="ltr">
-                                    <span className="font-mono tabular-nums font-bold text-slate-200 print:text-black text-xs">
-                                      {formatNumberFa(row.unitPrice)}
-                                    </span>
-                                    <span className="text-[10px] text-slate-400 print:text-slate-600 font-sans">
-                                      تومان
-                                    </span>
-                                  </div>
-                                </td>
-                                <td className="p-2 text-left">
-                                  <div className="flex items-center justify-end gap-1" dir="ltr">
-                                    <span className="font-mono tabular-nums font-black text-emerald-400 print:text-black text-xs">
-                                      {formatNumberFa(row.totalPrice)}
-                                    </span>
-                                    <span className="text-[10px] text-slate-400 print:text-slate-600 font-sans">
-                                      تومان
-                                    </span>
-                                  </div>
-                                </td>
+                                {isFinancialMode && (
+                                  <>
+                                    <td className="p-2 text-left">
+                                      <div className="flex items-center justify-end gap-1" dir="ltr">
+                                        <span className="font-mono tabular-nums font-bold text-slate-200 print:text-black text-xs">
+                                          {formatNumberFa(row.unitPrice)}
+                                        </span>
+                                        <span className="text-[10px] text-slate-400 print:text-slate-600 font-sans">
+                                          تومان
+                                        </span>
+                                      </div>
+                                    </td>
+                                    <td className="p-2 text-left">
+                                      <div className="flex items-center justify-end gap-1" dir="ltr">
+                                        <span className="font-mono tabular-nums font-black text-emerald-400 print:text-black text-xs">
+                                          {formatNumberFa(row.totalPrice)}
+                                        </span>
+                                        <span className="text-[10px] text-slate-400 print:text-slate-600 font-sans">
+                                          تومان
+                                        </span>
+                                      </div>
+                                    </td>
+                                  </>
+                                )}
                                 <td className="p-2 text-slate-400 print:text-black truncate">
                                   {row.warehouseName}
                                 </td>
+                                {!isFinancialMode && (
+                                  <td className="p-2 text-slate-300 print:text-black truncate">
+                                    {row.movement.notes || row.movement.description || '---'}
+                                  </td>
+                                )}
                               </tr>
                             ))
                           )}
@@ -3387,18 +3814,26 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                               <td className="p-3 text-center font-mono font-black text-emerald-400 print:text-black">
                                 {formatNumberFa(singleSupplierData.totalQty)}
                               </td>
-                              <td colSpan={2}></td>
-                              <td className="p-3 text-left">
-                                <div className="flex items-center justify-end gap-1" dir="ltr">
-                                  <span className="font-mono tabular-nums font-black text-emerald-400 print:text-black text-sm">
-                                    {formatNumberFa(singleSupplierData.totalVal)}
-                                  </span>
-                                  <span className="text-xs text-slate-300 print:text-black font-sans font-bold">
-                                    تومان
-                                  </span>
-                                </div>
-                              </td>
-                              <td></td>
+                              {isFinancialMode ? (
+                                <>
+                                  <td colSpan={2}></td>
+                                  <td className="p-3 text-left">
+                                    <div className="flex items-center justify-end gap-1" dir="ltr">
+                                      <span className="font-mono tabular-nums font-black text-emerald-400 print:text-black text-sm">
+                                        {formatNumberFa(singleSupplierData.totalVal)}
+                                      </span>
+                                      <span className="text-xs text-slate-300 print:text-black font-sans font-bold">
+                                        تومان
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td></td>
+                                </>
+                              ) : (
+                                <td colSpan={3} className="p-3 text-center text-slate-300 print:text-black">
+                                  تعداد کل اسناد: {toPersianDigits(singleSupplierData.rows.length)} سند
+                                </td>
+                              )}
                             </tr>
                           </tfoot>
                         )}
@@ -3489,13 +3924,20 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                     <table className="w-full min-w-[850px] text-right text-xs divide-y divide-slate-800 print:divide-black print:text-[13px] table-fixed">
                       <colgroup>
                         <col style={{ width: '4%' }} />
-                        <col style={{ width: '18%' }} />
+                        <col style={{ width: isFinancialMode ? '18%' : '22%' }} />
                         <col style={{ width: '12%' }} />
-                        <col style={{ width: '11%' }} />
-                        <col style={{ width: '14%' }} />
-                        <col style={{ width: '8%' }} />
-                        <col style={{ width: '11%' }} />
-                        <col style={{ width: '11%' }} />
+                        {isFinancialMode && <col style={{ width: '11%' }} />}
+                        <col style={{ width: isFinancialMode ? '14%' : '18%' }} />
+                        {!isFinancialMode && <col style={{ width: '11%' }} />}
+                        <col style={{ width: isFinancialMode ? '8%' : '11%' }} />
+                        {isFinancialMode ? (
+                          <>
+                            <col style={{ width: '11%' }} />
+                            <col style={{ width: '11%' }} />
+                          </>
+                        ) : (
+                          <col style={{ width: '11%' }} />
+                        )}
                         <col style={{ width: '11%' }} className="print:hidden" />
                       </colgroup>
                       <thead className="bg-slate-950/60 print:bg-slate-100 text-slate-400 print:text-black font-bold">
@@ -3503,18 +3945,25 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                           <th className="p-2 text-center font-bold">ردیف</th>
                           <th className="p-2 font-bold text-slate-100 print:text-black">نام مشتری</th>
                           <th className="p-2 text-center">شماره تماس</th>
-                          <th className="p-2 text-center">کد ملی / اقتصادی</th>
+                          {isFinancialMode && <th className="p-2 text-center">کد ملی / اقتصادی</th>}
                           <th className="p-2">استان و شهر</th>
+                          {!isFinancialMode && <th className="p-2 text-center">تعداد اسناد / حواله</th>}
                           <th className="p-2 text-center">تعداد اقلام صادره</th>
-                          <th className="p-2 text-left">ارزش کل فاکتورها</th>
-                          <th className="p-2 text-left">مانده حساب فعلی</th>
+                          {isFinancialMode ? (
+                            <>
+                              <th className="p-2 text-left">ارزش کل فاکتورها</th>
+                              <th className="p-2 text-left">مانده حساب فعلی</th>
+                            </>
+                          ) : (
+                            <th className="p-2 text-center">آخرین ارسال</th>
+                          )}
                           <th className="p-2 text-center print:hidden">عملیات کاردکس</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/60 print:divide-slate-300">
                         {customersAggregatedData.length === 0 ? (
                           <tr>
-                            <td colSpan={9} className="p-8 text-center text-slate-400">
+                            <td colSpan={isFinancialMode ? 9 : 8} className="p-8 text-center text-slate-400">
                               هیچ مشتری‌ای در سیستم ثبت نشده است.
                             </td>
                           </tr>
@@ -3533,35 +3982,50 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                               <td className="p-2 text-center font-mono text-slate-400 print:text-black" dir="ltr">
                                 {item.customer.phone ? toPersianDigits(item.customer.phone) : '---'}
                               </td>
-                              <td className="p-2 text-center font-mono text-slate-400 print:text-black">
-                                {item.customer.economic_code || item.customer.national_id ? toPersianDigits(item.customer.economic_code || item.customer.national_id || '') : '---'}
-                              </td>
+                              {isFinancialMode && (
+                                <td className="p-2 text-center font-mono text-slate-400 print:text-black">
+                                  {item.customer.economic_code || item.customer.national_id ? toPersianDigits(item.customer.economic_code || item.customer.national_id || '') : '---'}
+                                </td>
+                              )}
                               <td className="p-2 text-slate-400 print:text-black truncate">
                                 {item.customer.province ? `${item.customer.province} - ${item.customer.city || ''}` : '---'}
                               </td>
+                              {!isFinancialMode && (
+                                <td className="p-2 text-center font-mono font-bold text-indigo-300 print:text-black">
+                                  {toPersianDigits(item.movementsCount)}
+                                </td>
+                              )}
                               <td className="p-2 text-center font-mono font-bold text-slate-100 print:text-black">
                                 {toPersianDigits(item.totalItemsOut)}
                               </td>
-                              <td className="p-2 text-left">
-                                <div className="flex items-center justify-end gap-1" dir="ltr">
-                                  <span className="font-mono tabular-nums font-black text-emerald-400 print:text-black text-xs">
-                                    {formatNumberFa(item.totalValuation)}
-                                  </span>
-                                  <span className="text-[10px] text-slate-400 print:text-slate-600 font-sans">
-                                    تومان
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="p-2 text-left">
-                                <div className="flex items-center justify-end gap-1" dir="ltr">
-                                  <span className="font-mono tabular-nums font-black text-amber-400 print:text-black text-xs">
-                                    {formatNumberFa(item.currentBalance)}
-                                  </span>
-                                  <span className="text-[10px] text-slate-400 print:text-slate-600 font-sans">
-                                    تومان
-                                  </span>
-                                </div>
-                              </td>
+                              {isFinancialMode ? (
+                                <>
+                                  <td className="p-2 text-left">
+                                    <div className="flex items-center justify-end gap-1" dir="ltr">
+                                      <span className="font-mono tabular-nums font-black text-emerald-400 print:text-black text-xs">
+                                        {formatNumberFa(item.totalValuation)}
+                                      </span>
+                                      <span className="text-[10px] text-slate-400 print:text-slate-600 font-sans">
+                                        تومان
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="p-2 text-left">
+                                    <div className="flex items-center justify-end gap-1" dir="ltr">
+                                      <span className="font-mono tabular-nums font-black text-amber-400 print:text-black text-xs">
+                                        {formatNumberFa(item.currentBalance)}
+                                      </span>
+                                      <span className="text-[10px] text-slate-400 print:text-slate-600 font-sans">
+                                        تومان
+                                      </span>
+                                    </div>
+                                  </td>
+                                </>
+                              ) : (
+                                <td className="p-2 text-center font-mono text-slate-300 print:text-black whitespace-nowrap">
+                                  {item.lastActivityDate ? toPersianDigits(getPersianDate(item.lastActivityDate)) : '---'}
+                                </td>
+                              )}
                               <td className="p-2 text-center print:hidden">
                                 <button
                                   type="button"
@@ -3583,32 +4047,43 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                       {customersAggregatedData.length > 0 && (
                         <tfoot className="bg-slate-950/90 print:bg-slate-200 font-bold border-t-2 border-slate-700 print:border-black">
                           <tr>
-                            <td colSpan={5} className="p-3 text-slate-200 print:text-black font-bold">
+                            <td colSpan={isFinancialMode ? 5 : 4} className="p-3 text-slate-200 print:text-black font-bold">
                               مجموع کل مشتریان ({toPersianDigits(customersTotals.totalCustomers)} خریدار):
                             </td>
+                            {!isFinancialMode && (
+                              <td className="p-3 text-center font-mono font-black text-indigo-300 print:text-black">
+                                {formatNumberFa(customersTotals.totalMovements)} سند
+                              </td>
+                            )}
                             <td className="p-3 text-center font-mono font-black text-indigo-300 print:text-black">
                               {formatNumberFa(customersTotals.totalItemsOut)}
                             </td>
-                            <td className="p-3 text-left">
-                              <div className="flex items-center justify-end gap-1" dir="ltr">
-                                <span className="font-mono tabular-nums font-black text-emerald-400 print:text-black text-sm">
-                                  {formatNumberFa(customersTotals.totalValuation)}
-                                </span>
-                                <span className="text-xs text-slate-300 print:text-black font-sans font-bold">
-                                  تومان
-                                </span>
-                              </div>
-                            </td>
-                            <td className="p-3 text-left">
-                              <div className="flex items-center justify-end gap-1" dir="ltr">
-                                <span className="font-mono tabular-nums font-black text-amber-400 print:text-black text-sm">
-                                  {formatNumberFa(customersTotals.totalBalance)}
-                                </span>
-                                <span className="text-xs text-slate-300 print:text-black font-sans font-bold">
-                                  تومان
-                                </span>
-                              </div>
-                            </td>
+                            {isFinancialMode ? (
+                              <>
+                                <td className="p-3 text-left">
+                                  <div className="flex items-center justify-end gap-1" dir="ltr">
+                                    <span className="font-mono tabular-nums font-black text-emerald-400 print:text-black text-sm">
+                                      {formatNumberFa(customersTotals.totalValuation)}
+                                    </span>
+                                    <span className="text-xs text-slate-300 print:text-black font-sans font-bold">
+                                      تومان
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="p-3 text-left">
+                                  <div className="flex items-center justify-end gap-1" dir="ltr">
+                                    <span className="font-mono tabular-nums font-black text-amber-400 print:text-black text-sm">
+                                      {formatNumberFa(customersTotals.totalBalance)}
+                                    </span>
+                                    <span className="text-xs text-slate-300 print:text-black font-sans font-bold">
+                                      تومان
+                                    </span>
+                                  </div>
+                                </td>
+                              </>
+                            ) : (
+                              <td></td>
+                            )}
                             <td className="print:hidden"></td>
                           </tr>
                         </tfoot>
@@ -3632,10 +4107,19 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                           <span className="text-slate-400 block font-medium">شماره تماس:</span>
                           <span className="font-mono font-bold" dir="ltr">{toPersianDigits(singleCustomerData.customer.phone || '---')}</span>
                         </div>
-                        <div>
-                          <span className="text-slate-400 block font-medium">مانده حساب:</span>
-                          <span className="font-mono font-bold text-amber-400">{formatCurrencyToman(singleCustomerData.customer.current_balance)}</span>
-                        </div>
+                        {isFinancialMode ? (
+                          <div>
+                            <span className="text-slate-400 block font-medium">مانده حساب:</span>
+                            <span className="font-mono font-bold text-amber-400">{formatCurrencyToman(singleCustomerData.customer.current_balance)}</span>
+                          </div>
+                        ) : (
+                          <div>
+                            <span className="text-slate-400 block font-medium">مجموع اقلام ارسالی:</span>
+                            <span className="font-mono font-bold text-amber-400 print:text-black">
+                              {formatNumberFa(singleCustomerData.totalQty)} قلم ({toPersianDigits(singleCustomerData.rows.length)} حواله)
+                            </span>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -3643,16 +4127,25 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                       <table className="w-full min-w-[950px] text-right text-xs divide-y divide-slate-800 print:divide-black print:text-[13px] table-fixed">
                         <colgroup>
                           <col style={{ width: '4%' }} />
-                          <col style={{ width: '18%' }} />
+                          <col style={{ width: isFinancialMode ? '18%' : '21%' }} />
                           <col style={{ width: '8.5%' }} />
                           <col style={{ width: '8.5%' }} />
                           <col style={{ width: '8.5%' }} />
                           <col style={{ width: '9%' }} />
                           <col style={{ width: '6.5%' }} />
                           <col style={{ width: '5%' }} />
-                          <col style={{ width: '11%' }} />
-                          <col style={{ width: '12%' }} />
-                          <col style={{ width: '9%' }} />
+                          {isFinancialMode ? (
+                            <>
+                              <col style={{ width: '11%' }} />
+                              <col style={{ width: '12%' }} />
+                              <col style={{ width: '9%' }} />
+                            </>
+                          ) : (
+                            <>
+                              <col style={{ width: '12%' }} />
+                              <col style={{ width: '17%' }} />
+                            </>
+                          )}
                         </colgroup>
                         <thead className="bg-slate-950/60 print:bg-slate-100 text-slate-400 print:text-black font-bold">
                           <tr>
@@ -3664,16 +4157,21 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                             <th className="p-2 text-center">تاریخ ثبت</th>
                             <th className="p-2 text-center">مقدار صادره</th>
                             <th className="p-2 text-center">واحد</th>
-                            <th className="p-2 text-left">قیمت فروش</th>
-                            <th className="p-2 text-left">ارزش کل سند</th>
+                            {isFinancialMode && (
+                              <>
+                                <th className="p-2 text-left">قیمت فروش</th>
+                                <th className="p-2 text-left">ارزش کل سند</th>
+                              </>
+                            )}
                             <th className="p-2">انبار مبدا</th>
+                            {!isFinancialMode && <th className="p-2">شرح / توضیحات ارسال</th>}
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800/60 print:divide-slate-300">
                           {singleCustomerData.rows.length === 0 ? (
                             <tr>
-                              <td colSpan={11} className="p-8 text-center text-slate-400">
-                                هیچ کالای صادره یا سند فروش برای مشتری انتخابی یافت نشد.
+                              <td colSpan={isFinancialMode ? 11 : 10} className="p-8 text-center text-slate-400">
+                                هیچ کالای صادره یا سند ارسال برای مشتری انتخابی یافت نشد.
                               </td>
                             </tr>
                           ) : (
@@ -3706,29 +4204,38 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                                 <td className="p-2 text-center text-slate-400 print:text-black">
                                   {row.unit}
                                 </td>
-                                <td className="p-2 text-left">
-                                  <div className="flex items-center justify-end gap-1" dir="ltr">
-                                    <span className="font-mono tabular-nums font-bold text-slate-200 print:text-black text-xs">
-                                      {formatNumberFa(row.unitPrice)}
-                                    </span>
-                                    <span className="text-[10px] text-slate-400 print:text-slate-600 font-sans">
-                                      تومان
-                                    </span>
-                                  </div>
-                                </td>
-                                <td className="p-2 text-left">
-                                  <div className="flex items-center justify-end gap-1" dir="ltr">
-                                    <span className="font-mono tabular-nums font-black text-emerald-400 print:text-black text-xs">
-                                      {formatNumberFa(row.totalPrice)}
-                                    </span>
-                                    <span className="text-[10px] text-slate-400 print:text-slate-600 font-sans">
-                                      تومان
-                                    </span>
-                                  </div>
-                                </td>
+                                {isFinancialMode && (
+                                  <>
+                                    <td className="p-2 text-left">
+                                      <div className="flex items-center justify-end gap-1" dir="ltr">
+                                        <span className="font-mono tabular-nums font-bold text-slate-200 print:text-black text-xs">
+                                          {formatNumberFa(row.unitPrice)}
+                                        </span>
+                                        <span className="text-[10px] text-slate-400 print:text-slate-600 font-sans">
+                                          تومان
+                                        </span>
+                                      </div>
+                                    </td>
+                                    <td className="p-2 text-left">
+                                      <div className="flex items-center justify-end gap-1" dir="ltr">
+                                        <span className="font-mono tabular-nums font-black text-emerald-400 print:text-black text-xs">
+                                          {formatNumberFa(row.totalPrice)}
+                                        </span>
+                                        <span className="text-[10px] text-slate-400 print:text-slate-600 font-sans">
+                                          تومان
+                                        </span>
+                                      </div>
+                                    </td>
+                                  </>
+                                )}
                                 <td className="p-2 text-slate-400 print:text-black truncate">
                                   {row.warehouseName}
                                 </td>
+                                {!isFinancialMode && (
+                                  <td className="p-2 text-slate-300 print:text-black truncate">
+                                    {row.movement.notes || row.movement.description || '---'}
+                                  </td>
+                                )}
                               </tr>
                             ))
                           )}
@@ -3742,18 +4249,26 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                               <td className="p-3 text-center font-mono font-black text-rose-400 print:text-black">
                                 {formatNumberFa(singleCustomerData.totalQty)}
                               </td>
-                              <td colSpan={2}></td>
-                              <td className="p-3 text-left">
-                                <div className="flex items-center justify-end gap-1" dir="ltr">
-                                  <span className="font-mono tabular-nums font-black text-emerald-400 print:text-black text-sm">
-                                    {formatNumberFa(singleCustomerData.totalVal)}
-                                  </span>
-                                  <span className="text-xs text-slate-300 print:text-black font-sans font-bold">
-                                    تومان
-                                  </span>
-                                </div>
-                              </td>
-                              <td></td>
+                              {isFinancialMode ? (
+                                <>
+                                  <td colSpan={2}></td>
+                                  <td className="p-3 text-left">
+                                    <div className="flex items-center justify-end gap-1" dir="ltr">
+                                      <span className="font-mono tabular-nums font-black text-emerald-400 print:text-black text-sm">
+                                        {formatNumberFa(singleCustomerData.totalVal)}
+                                      </span>
+                                      <span className="text-xs text-slate-300 print:text-black font-sans font-bold">
+                                        تومان
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td></td>
+                                </>
+                              ) : (
+                                <td colSpan={3} className="p-3 text-center text-slate-300 print:text-black">
+                                  تعداد کل حواله‌ها: {toPersianDigits(singleCustomerData.rows.length)} حواله
+                                </td>
+                              )}
                             </tr>
                           </tfoot>
                         )}
@@ -4282,7 +4797,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             <div className="border-b border-dotted border-slate-600 print:border-black w-32 mx-auto pt-10"></div>
           </div>
           <div className="space-y-4">
-            <div>مدیریت بازرگانی و مالی</div>
+            <div>{isFinancialMode ? 'مدیریت بازرگانی و مالی' : 'مدیریت عامل / عملیات کارخانه'}</div>
             <div className="border-b border-dotted border-slate-600 print:border-black w-32 mx-auto pt-10"></div>
           </div>
         </div>

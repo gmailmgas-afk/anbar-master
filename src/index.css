@@ -245,13 +245,16 @@ body:not(.amgas-isolated-printing) main table:not(.kardex-print-table):not(.rece
 .amgas-receipt-page table thead th {
   font-size: 0.8125rem !important; /* 13px */
   font-weight: 800 !important;
+  line-height: 1.45 !important;
+  vertical-align: middle !important;
 }
 
 #goods-entry-print-sheet table tbody td,
 #goods-exit-print-sheet table tbody td,
 .amgas-receipt-page table tbody td {
   font-size: 0.84rem !important; /* ~13.5px */
-  line-height: 1.4 !important;
+  line-height: 1.5 !important;
+  vertical-align: middle !important;
 }
 
 #goods-entry-print-sheet table tbody td input,
@@ -499,8 +502,10 @@ button {
   table.kardex-table th {
     font-size: 11.5px !important;
     font-weight: 800 !important;
-    padding: 2.5px 1.5px !important;
-    line-height: 1.25 !important;
+    padding: 4px 2px !important;
+    line-height: 1.45 !important;
+    vertical-align: middle !important;
+    overflow: visible !important;
     letter-spacing: normal !important;
     box-sizing: border-box !important;
   }
@@ -510,7 +515,8 @@ button {
   #printable-gas-kardex table th,
   #am-gas-isolated-print-mount table th {
     font-size: 11px !important;
-    line-height: 1.2 !important;
+    line-height: 1.45 !important;
+    vertical-align: middle !important;
     font-weight: 900 !important;
   }
 
@@ -518,6 +524,8 @@ button {
   #printable-gas-kardex table tfoot td,
   #am-gas-isolated-print-mount table tfoot td {
     font-size: 12px !important;
+    line-height: 1.5 !important;
+    vertical-align: middle !important;
     font-weight: 900 !important;
   }
 
@@ -528,7 +536,8 @@ button {
     text-overflow: clip !important;
     overflow-wrap: break-word !important;
     word-break: break-word !important;
-    line-height: 1.35 !important;
+    line-height: 1.45 !important;
+    vertical-align: middle !important;
   }
 
   #printable-gas-kardex table tbody td:nth-child(14),
@@ -538,32 +547,44 @@ button {
     text-overflow: clip !important;
     overflow-wrap: break-word !important;
     word-break: break-word !important;
-    line-height: 1.3 !important;
+    line-height: 1.45 !important;
+    vertical-align: middle !important;
   }
 
   /* Report Table Print Typography */
   #printable-report-section table th {
     font-size: 9px !important;
     font-weight: 800 !important;
-    padding: 3px 4px !important;
+    padding: 4px 4px !important;
+    line-height: 1.45 !important;
+    vertical-align: middle !important;
+    overflow: visible !important;
   }
   #printable-report-section table td {
     font-size: 9px !important;
     font-weight: 700 !important;
-    padding: 3px 4px !important;
+    padding: 4px 4px !important;
+    line-height: 1.5 !important;
+    vertical-align: middle !important;
+    overflow: visible !important;
   }
   #printable-report-section table tfoot td {
     font-size: 9.5px !important;
     font-weight: 900 !important;
-    padding: 4px !important;
+    padding: 5px 4px !important;
+    line-height: 1.5 !important;
+    vertical-align: middle !important;
+    overflow: visible !important;
   }
 
   /* Production Kardex Print Typography */
   #printable-production-kardex table th,
   #printable-production-kardex table td {
-    font-size: 8px !important;
-    padding: 2px !important;
-    line-height: 1.2 !important;
+    font-size: 8.5px !important;
+    padding: 3.5px 2px !important;
+    line-height: 1.45 !important;
+    vertical-align: middle !important;
+    overflow: visible !important;
   }
 
   /* Receipt Slips Print Typography */
@@ -576,8 +597,10 @@ button {
   .amgas-receipt-page table th,
   .amgas-receipt-page table td {
     font-size: 10.5px !important;
-    padding: 4px 6px !important;
-    line-height: 1.3 !important;
+    padding: 5px 6px !important;
+    line-height: 1.5 !important;
+    vertical-align: middle !important;
+    overflow: visible !important;
   }
 
   /* Force all numbers, serials, codes, and table numeric cells to print in 100% English digits */

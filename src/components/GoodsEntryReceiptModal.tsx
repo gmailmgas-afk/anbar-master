@@ -1452,15 +1452,15 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
 
                     {/* MAIN 6-COLUMN TABLE (Exact 3 rows for this page) */}
                     <div className="mt-2 overflow-hidden border-2 border-slate-900 rounded-xs">
-                      <table className="w-full text-center border-collapse text-xs sm:text-sm">
+                      <table className="w-full text-center border-collapse text-xs sm:text-sm leading-normal">
                         <thead>
-                          <tr className="bg-amber-200/90 text-slate-950 font-black border-b-2 border-slate-900 text-xs sm:text-[13px]">
-                            <th className="border-l-2 border-slate-900 py-2 px-1 w-12 font-black">ردیف</th>
-                            <th className="border-l-2 border-slate-900 py-2 px-3 text-right font-black">شرح</th>
-                            <th className="border-l-2 border-slate-900 py-2 px-1 w-20 font-black">تعداد</th>
-                            <th className="border-l-2 border-slate-900 py-2 px-3 w-48 font-black">تعداد (به حروف)</th>
-                            <th className="border-l-2 border-slate-900 py-2 px-2 w-28 font-black">هزینه حمل</th>
-                            <th className="py-2 px-3 w-32 font-black">ملاحظات</th>
+                          <tr className="bg-amber-200/90 text-slate-950 font-black border-b-2 border-slate-900 text-xs sm:text-[13px] leading-snug">
+                            <th className="border-l-2 border-slate-900 py-2 px-1 w-12 font-black align-middle">ردیف</th>
+                            <th className="border-l-2 border-slate-900 py-2 px-3 text-right font-black align-middle">شرح</th>
+                            <th className="border-l-2 border-slate-900 py-2 px-1 w-20 font-black align-middle">تعداد</th>
+                            <th className="border-l-2 border-slate-900 py-2 px-3 w-48 font-black align-middle">تعداد (به حروف)</th>
+                            <th className="border-l-2 border-slate-900 py-2 px-2 w-28 font-black align-middle">هزینه حمل</th>
+                            <th className="py-2 px-3 w-32 font-black align-middle">ملاحظات</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1469,10 +1469,10 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
                             return (
                               <tr
                                 key={globalIdx}
-                                className="border-b border-dashed border-slate-400 h-10 hover:bg-amber-50 transition-colors group text-xs sm:text-sm"
+                                className="border-b border-dashed border-slate-400 h-10 hover:bg-amber-50 transition-colors group text-xs sm:text-sm leading-normal"
                               >
                                 {/* 1. ردیف */}
-                                <td className="border-l-2 border-slate-900 font-black py-1.5 px-1 bg-amber-100/30 relative text-sm sm:text-base">
+                                <td className="border-l-2 border-slate-900 font-black py-1.5 px-1 bg-amber-100/30 relative text-sm sm:text-base align-middle">
                                   <div className="flex items-center justify-center gap-1">
                                     <span dir="ltr" style={{ unicodeBidi: 'isolate' }} className="font-mono font-black text-sm sm:text-base text-slate-950">{toEnglishDigits(item.rowNum)}</span>
                                     <button
@@ -1492,7 +1492,7 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
                                 </td>
 
                                 {/* 2. شرح */}
-                                <td className="border-l-2 border-slate-900 text-right py-1.5 px-3 font-bold text-xs sm:text-sm text-slate-950">
+                                <td className="border-l-2 border-slate-900 text-right py-1.5 px-3 font-bold text-xs sm:text-sm text-slate-950 align-middle">
                                   {isEditing ? (
                                     <input
                                       type="text"
@@ -1502,12 +1502,12 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
                                       className="w-full px-2 py-1 text-xs sm:text-sm font-bold border border-amber-400 rounded bg-white text-slate-900 shadow-xs"
                                     />
                                   ) : (
-                                    <span className="text-xs sm:text-sm font-bold text-slate-950 leading-snug block">{item.description || ''}</span>
+                                    <span className="text-xs sm:text-sm font-bold text-slate-950 leading-normal block">{item.description || ''}</span>
                                   )}
                                 </td>
 
                                 {/* 3. تعداد */}
-                                <td className="border-l-2 border-slate-900 font-black py-1.5 px-1.5 text-slate-950 text-center text-sm sm:text-base">
+                                <td className="border-l-2 border-slate-900 font-black py-1.5 px-1.5 text-slate-950 text-center text-sm sm:text-base align-middle">
                                   {isEditing ? (
                                     <input
                                       type="number"
@@ -1522,7 +1522,7 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
                                 </td>
 
                                 {/* 4. تعداد به حروف */}
-                                <td className="border-l-2 border-slate-900 py-1.5 px-3 text-slate-950 font-bold text-xs sm:text-sm">
+                                <td className="border-l-2 border-slate-900 py-1.5 px-3 text-slate-950 font-bold text-xs sm:text-sm align-middle">
                                   {isEditing ? (
                                     <input
                                       type="text"
@@ -1532,12 +1532,12 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
                                       className="w-full px-2 py-1 text-xs sm:text-sm font-bold border border-amber-400 rounded bg-white text-slate-900 shadow-xs"
                                     />
                                   ) : (
-                                    <span className="text-xs sm:text-sm font-bold text-slate-950 leading-snug block">{item.quantityInWords || ''}</span>
+                                    <span className="text-xs sm:text-sm font-bold text-slate-950 leading-normal block">{item.quantityInWords || ''}</span>
                                   )}
                                 </td>
 
                                 {/* 5. هزینه حمل */}
-                                <td className="border-l-2 border-slate-900 py-1.5 px-2.5 text-slate-950 font-bold text-xs sm:text-sm text-center">
+                                <td className="border-l-2 border-slate-900 py-1.5 px-2.5 text-slate-950 font-bold text-xs sm:text-sm text-center align-middle">
                                   {isEditing ? (
                                     <input
                                       type="text"
@@ -1552,7 +1552,7 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
                                 </td>
 
                                 {/* 6. ملاحظات */}
-                                <td className="py-1.5 px-3 text-slate-950 font-semibold text-xs sm:text-sm">
+                                <td className="py-1.5 px-3 text-slate-950 font-semibold text-xs sm:text-sm align-middle">
                                   {isEditing ? (
                                     <input
                                       type="text"
@@ -1562,7 +1562,7 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
                                       className="w-full px-2 py-1 text-xs sm:text-sm font-semibold border border-amber-400 rounded bg-white text-slate-900 shadow-xs"
                                     />
                                   ) : (
-                                    <span className="text-xs sm:text-sm font-semibold text-slate-950 leading-snug block">{item.remarks || ''}</span>
+                                    <span className="text-xs sm:text-sm font-semibold text-slate-950 leading-normal block">{item.remarks || ''}</span>
                                   )}
                                 </td>
                               </tr>

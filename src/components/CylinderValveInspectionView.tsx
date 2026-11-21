@@ -1460,41 +1460,41 @@ export const CylinderValveInspectionView: React.FC<CylinderValveInspectionViewPr
 
                 {/* Items Table */}
                 <div className="mt-4">
-                  <table className="w-full text-right text-xs border border-slate-900 border-collapse">
+                  <table className="w-full text-right text-xs border border-slate-900 border-collapse leading-normal">
                     <thead>
-                      <tr className="bg-amber-100/90 text-slate-950 font-bold border-b border-slate-900">
-                        <th className="border border-slate-900 p-2 text-center w-12">ردیف</th>
-                        <th className="border border-slate-900 p-2">شرح جنس / قلم کالا</th>
-                        <th className="border border-slate-900 p-2 text-center w-24">تعداد به عدد</th>
-                        <th className="border border-slate-900 p-2 w-48">تعداد به حروف</th>
-                        <th className="border border-slate-900 p-2">ملاحظات و وضعیت کنترل کیفیت</th>
+                      <tr className="bg-amber-100/90 text-slate-950 font-bold border-b border-slate-900 leading-snug">
+                        <th className="border border-slate-900 p-2 text-center w-12 align-middle">ردیف</th>
+                        <th className="border border-slate-900 p-2 align-middle">شرح جنس / قلم کالا</th>
+                        <th className="border border-slate-900 p-2 text-center w-24 align-middle">تعداد به عدد</th>
+                        <th className="border border-slate-900 p-2 w-48 align-middle">تعداد به حروف</th>
+                        <th className="border border-slate-900 p-2 align-middle">ملاحظات و وضعیت کنترل کیفیت</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr>
-                        <td className="border border-slate-900 p-2 text-center font-mono">۱</td>
-                        <td className="border border-slate-900 p-2 font-bold">{selectedInspectionForReceipt.item_name} (سالم)</td>
-                        <td className="border border-slate-900 p-2 text-center font-mono font-black">{toPersianDigits(selectedInspectionForReceipt.actual_healthy_quantity)}</td>
-                        <td className="border border-slate-900 p-2 font-semibold">{numberToPersianWords(selectedInspectionForReceipt.actual_healthy_quantity)}</td>
-                        <td className="border border-slate-900 p-2 text-[11px]">شمارش سالم فیزیکی در انبار</td>
+                        <td className="border border-slate-900 p-2 text-center font-mono align-middle">۱</td>
+                        <td className="border border-slate-900 p-2 font-bold align-middle">{selectedInspectionForReceipt.item_name} (سالم)</td>
+                        <td className="border border-slate-900 p-2 text-center font-mono font-black align-middle">{toPersianDigits(selectedInspectionForReceipt.actual_healthy_quantity)}</td>
+                        <td className="border border-slate-900 p-2 font-semibold align-middle">{numberToPersianWords(selectedInspectionForReceipt.actual_healthy_quantity)}</td>
+                        <td className="border border-slate-900 p-2 text-[11px] align-middle">شمارش سالم فیزیکی در انبار</td>
                       </tr>
                       {selectedInspectionForReceipt.defective_quantity > 0 && (
                         <tr>
-                          <td className="border border-slate-900 p-2 text-center font-mono">۲</td>
-                          <td className="border border-slate-900 p-2 font-bold text-red-700">{selectedInspectionForReceipt.item_name} (معیوب / فاقد استاندارد)</td>
-                          <td className="border border-slate-900 p-2 text-center font-mono font-black text-red-700">{toPersianDigits(selectedInspectionForReceipt.defective_quantity)}</td>
-                          <td className="border border-slate-900 p-2 font-semibold text-red-700">{numberToPersianWords(selectedInspectionForReceipt.defective_quantity)}</td>
-                          <td className="border border-slate-900 p-2 text-[11px] text-red-700">معیوب / خارج از چرخه شارژ</td>
+                          <td className="border border-slate-900 p-2 text-center font-mono align-middle">۲</td>
+                          <td className="border border-slate-900 p-2 font-bold text-red-700 align-middle">{selectedInspectionForReceipt.item_name} (معیوب / فاقد استاندارد)</td>
+                          <td className="border border-slate-900 p-2 text-center font-mono font-black text-red-700 align-middle">{toPersianDigits(selectedInspectionForReceipt.defective_quantity)}</td>
+                          <td className="border border-slate-900 p-2 font-semibold text-red-700 align-middle">{numberToPersianWords(selectedInspectionForReceipt.defective_quantity)}</td>
+                          <td className="border border-slate-900 p-2 text-[11px] text-red-700 align-middle">معیوب / خارج از چرخه شارژ</td>
                         </tr>
                       )}
                       {/* Blank rows to complete physical form look */}
                       {[3, 4].map(idx => (
                         <tr key={idx} className="h-8">
-                          <td className="border border-slate-900 p-2 text-center font-mono text-slate-400">{toPersianDigits(idx)}</td>
-                          <td className="border border-slate-900 p-2"></td>
-                          <td className="border border-slate-900 p-2"></td>
-                          <td className="border border-slate-900 p-2"></td>
-                          <td className="border border-slate-900 p-2"></td>
+                          <td className="border border-slate-900 p-2 text-center font-mono text-slate-400 align-middle">{toPersianDigits(idx)}</td>
+                          <td className="border border-slate-900 p-2 align-middle"></td>
+                          <td className="border border-slate-900 p-2 align-middle"></td>
+                          <td className="border border-slate-900 p-2 align-middle"></td>
+                          <td className="border border-slate-900 p-2 align-middle"></td>
                         </tr>
                       ))}
                     </tbody>

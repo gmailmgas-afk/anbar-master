@@ -416,17 +416,17 @@ export const SkuPrintModal: React.FC<SkuPrintModalProps> = ({
             {/* Format 1: Official Table View */}
             {viewFormat === 'table' ? (
               <div className="overflow-x-auto">
-                <table className="w-full text-right text-xs border-collapse">
+                <table className="w-full text-right text-xs border-collapse leading-normal">
                   <thead>
-                    <tr className="bg-slate-100 text-slate-900 border-y-2 border-slate-800 text-[11px]">
-                      <th className="p-2 text-center w-10 border border-slate-300">ردیف</th>
-                      <th className="p-2 border border-slate-300 text-left font-bold" dir="ltr">کد کالا (SKU)</th>
-                      <th className="p-2 border border-slate-300 font-bold">نام محصول و مشخصات</th>
-                      <th className="p-2 border border-slate-300">دسته‌بندی</th>
-                      {includeShelf && <th className="p-2 border border-slate-300 text-center">انبار و قفسه</th>}
-                      <th className="p-2 border border-slate-300 text-center w-16">واحد</th>
-                      {includeStock && <th className="p-2 border border-slate-300 text-center w-20">موجودی</th>}
-                      {includeBarcode && <th className="p-2 border border-slate-300 text-center w-28">بارکد</th>}
+                    <tr className="bg-slate-100 text-slate-900 border-y-2 border-slate-800 text-[11px] leading-snug">
+                      <th className="p-2 text-center w-10 border border-slate-300 align-middle">ردیف</th>
+                      <th className="p-2 border border-slate-300 text-left font-bold align-middle" dir="ltr">کد کالا (SKU)</th>
+                      <th className="p-2 border border-slate-300 font-bold align-middle">نام محصول و مشخصات</th>
+                      <th className="p-2 border border-slate-300 align-middle">دسته‌بندی</th>
+                      {includeShelf && <th className="p-2 border border-slate-300 text-center align-middle">انبار و قفسه</th>}
+                      <th className="p-2 border border-slate-300 text-center w-16 align-middle">واحد</th>
+                      {includeStock && <th className="p-2 border border-slate-300 text-center w-20 align-middle">موجودی</th>}
+                      {includeBarcode && <th className="p-2 border border-slate-300 text-center w-28 align-middle">بارکد</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -439,38 +439,38 @@ export const SkuPrintModal: React.FC<SkuPrintModalProps> = ({
                       return (
                         <tr
                           key={p.product_id}
-                          className={`border-b border-slate-300 ${idx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'}`}
+                          className={`border-b border-slate-300 leading-normal ${idx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'}`}
                         >
-                          <td className="p-2 text-center font-mono text-[11px] text-slate-600 border border-slate-300">
+                          <td className="p-2 text-center font-mono text-[11px] text-slate-600 border border-slate-300 align-middle">
                             {toPersianDigits(idx + 1)}
                           </td>
-                          <td className="p-2 border border-slate-300 font-mono text-left" dir="ltr">
+                          <td className="p-2 border border-slate-300 font-mono text-left align-middle" dir="ltr">
                             <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-300 text-slate-950 font-black text-xs sm:text-sm tracking-wider inline-block">
                               {p.sku}
                             </span>
                           </td>
-                          <td className="p-2 border border-slate-300 font-black text-slate-950 text-xs sm:text-sm">
+                          <td className="p-2 border border-slate-300 font-black text-slate-950 text-xs sm:text-sm align-middle">
                             {p.name}
                           </td>
-                          <td className="p-2 border border-slate-300 text-[11px] text-slate-700">
+                          <td className="p-2 border border-slate-300 text-[11px] text-slate-700 align-middle">
                             {cat?.name || '---'}
                           </td>
                           {includeShelf && (
-                            <td className="p-2 border border-slate-300 text-center text-[11px] text-slate-700">
+                            <td className="p-2 border border-slate-300 text-center text-[11px] text-slate-700 align-middle">
                               <span className="font-semibold">{wh?.name?.replace(/^انبار\s+/, '') || 'شیرآلات'}</span>
                               <span className="font-mono font-bold text-slate-900 mx-1">({shelf})</span>
                             </td>
                           )}
-                          <td className="p-2 border border-slate-300 text-center text-[11px] text-slate-700">
+                          <td className="p-2 border border-slate-300 text-center text-[11px] text-slate-700 align-middle">
                             {p.unit || 'عدد'}
                           </td>
                           {includeStock && (
-                            <td className="p-2 border border-slate-300 text-center font-mono font-bold text-slate-950 text-xs">
+                            <td className="p-2 border border-slate-300 text-center font-mono font-bold text-slate-950 text-xs align-middle">
                               {formatNumberFa(stock)}
                             </td>
                           )}
                           {includeBarcode && (
-                            <td className="p-2 border border-slate-300 text-center font-mono text-[11px] text-slate-700" dir="ltr">
+                            <td className="p-2 border border-slate-300 text-center font-mono text-[11px] text-slate-700 align-middle" dir="ltr">
                               {p.barcode || '---'}
                             </td>
                           )}

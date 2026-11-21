@@ -82,7 +82,7 @@ export async function exportElementToPdf(
   // Positioned at top: 0, left: 0 with opacity: 0 and z-index: -9999
   // (Avoids left: -99999px which disrupts font shaping and canvas rasterization in Blink/WebKit)
   const container = document.createElement('div');
-  container.className = 'amgas-pdf-export-container';
+  container.className = `amgas-pdf-export-container amgas-pdf-${orientation}`;
   container.style.position = 'fixed';
   container.style.top = '0';
   container.style.left = '0';
@@ -127,7 +127,8 @@ export async function exportElementToPdf(
       textSpan.style.color = '#020617';
       textSpan.style.fontWeight = '700';
       textSpan.style.fontSize = fontSize;
-      textSpan.style.lineHeight = '1.2';
+      textSpan.style.lineHeight = '1.45';
+      textSpan.style.verticalAlign = 'middle';
       textSpan.style.fontFamily = "'Vazirmatn', -apple-system, BlinkMacSystemFont, Tahoma, Arial, sans-serif";
       textSpan.style.letterSpacing = 'normal';
       textSpan.style.wordSpacing = 'normal';
@@ -220,9 +221,11 @@ export async function exportElementToPdf(
     }
     .amgas-pdf-export-container th,
     .amgas-pdf-export-container td {
-      overflow: hidden !important;
-      text-overflow: ellipsis !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
       word-break: normal !important;
+      overflow-wrap: break-word !important;
+      vertical-align: middle !important;
       box-sizing: border-box !important;
     }
     /* Kardex Specific Typography within PDF */
@@ -292,7 +295,9 @@ export async function exportElementToPdf(
       color: #020617 !important;
     }
     .amgas-pdf-export-container #printable-gas-kardex tfoot td[colspan],
-    .amgas-pdf-export-container #printable-gas-kardex tfoot td:first-child {
+    .amgas-pdf-export-container #printable-gas-kardex tfoot td:first-child,
+    .amgas-pdf-export-container #printable-production-kardex tfoot td[colspan],
+    .amgas-pdf-export-container #printable-production-kardex tfoot td:first-child {
       text-align: right !important;
       padding: 6px 12px 6px 6px !important;
       vertical-align: middle !important;
@@ -305,7 +310,11 @@ export async function exportElementToPdf(
     .amgas-pdf-export-container #cylinder-inspection-official-sheet th {
       font-size: 12.5px !important;
       font-weight: 800 !important;
-      padding: 5px 6px !important;
+      line-height: 1.45 !important;
+      padding: 6px 6px !important;
+      vertical-align: middle !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
     }
     .amgas-pdf-export-container .amgas-receipt-page td,
     .amgas-pdf-export-container #goods-entry-print-sheet td,
@@ -313,7 +322,30 @@ export async function exportElementToPdf(
     .amgas-pdf-export-container #cylinder-inspection-official-sheet td {
       font-size: 12.5px !important;
       font-weight: 700 !important;
-      padding: 5px 6px !important;
+      line-height: 1.5 !important;
+      padding: 6px 6px !important;
+      vertical-align: middle !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
+    }
+    /* SKU Printable Sheet Typography within PDF */
+    .amgas-pdf-export-container #sku-printable-sheet th {
+      font-size: 11.5px !important;
+      font-weight: 900 !important;
+      line-height: 1.45 !important;
+      padding: 6px 4px !important;
+      vertical-align: middle !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
+    }
+    .amgas-pdf-export-container #sku-printable-sheet td {
+      font-size: 12px !important;
+      font-weight: 700 !important;
+      line-height: 1.5 !important;
+      padding: 6px 4px !important;
+      vertical-align: middle !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
     }
     /* Reports Typography within PDF */
     .amgas-pdf-export-container #printable-report-section,
@@ -377,8 +409,10 @@ export async function exportElementToPdf(
       background-color: #e2e8f0 !important;
       color: #000000 !important;
       border: 1px solid #64748b !important;
-      line-height: 1.3 !important;
+      line-height: 1.45 !important;
       vertical-align: middle !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
     }
     .amgas-pdf-export-container #printable-report-section th.text-center,
     .amgas-pdf-export-container .amgas-report-page th.text-center {
@@ -393,12 +427,20 @@ export async function exportElementToPdf(
     .amgas-pdf-export-container .amgas-report-page td {
       font-size: 12px !important;
       font-weight: 700 !important;
-      padding: 5px 4px !important;
+      padding: 6px 4px !important;
       color: #000000 !important;
       border: 1px solid #cbd5e1 !important;
       background-color: #ffffff !important;
-      line-height: 1.4 !important;
+      line-height: 1.5 !important;
       vertical-align: middle !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
+    }
+    .amgas-pdf-export-container #printable-report-section td.truncate,
+    .amgas-pdf-export-container .amgas-report-page td.truncate {
+      white-space: normal !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
     }
     .amgas-pdf-export-container #printable-report-section td.text-center,
     .amgas-pdf-export-container .amgas-report-page td.text-center {
@@ -417,7 +459,35 @@ export async function exportElementToPdf(
     .amgas-pdf-export-container #printable-report-section td *,
     .amgas-pdf-export-container .amgas-report-page td * {
       font-size: 12px !important;
+      line-height: 1.5 !important;
+    }
+    /* Portrait A4 Report Table Harmonization (794px width) */
+    .amgas-pdf-portrait #printable-report-section th,
+    .amgas-pdf-portrait .amgas-report-page th {
+      font-size: 10.5px !important;
+      padding: 5px 2px !important;
       line-height: 1.4 !important;
+    }
+    .amgas-pdf-portrait #printable-report-section td,
+    .amgas-pdf-portrait .amgas-report-page td,
+    .amgas-pdf-portrait #printable-report-section td *,
+    .amgas-pdf-portrait .amgas-report-page td * {
+      font-size: 10.5px !important;
+      line-height: 1.45 !important;
+    }
+    .amgas-pdf-portrait #printable-report-section td,
+    .amgas-pdf-portrait .amgas-report-page td {
+      padding: 5px 2px !important;
+    }
+    .amgas-pdf-portrait #printable-report-section th:not(.text-center),
+    .amgas-pdf-portrait .amgas-report-page th:not(.text-center),
+    .amgas-pdf-portrait #printable-report-section td:not(.text-center):not([class*="text-left"]):not([class*="text-center"]),
+    .amgas-pdf-portrait .amgas-report-page td:not(.text-center):not([class*="text-left"]):not([class*="text-center"]) {
+      padding-right: 4px !important;
+    }
+    .amgas-pdf-portrait #printable-report-section td.text-left,
+    .amgas-pdf-portrait .amgas-report-page td.text-left {
+      padding-left: 4px !important;
     }
     /* CRITICAL: Strictly REMOVE all small boxes, pill borders, outlines and background cards around badges (نوع شیر, باقی‌مانده, وضعیت تراز, etc.) in PDF */
     .amgas-pdf-export-container #printable-report-section td span,
@@ -498,6 +568,7 @@ export async function exportElementToPdf(
     .amgas-pdf-export-container tfoot td {
       font-size: 12px !important;
       font-weight: 900 !important;
+      line-height: 1.5 !important;
       padding: 6px 6px !important;
       background-color: #f1f5f9 !important;
       color: #000000 !important;
@@ -505,11 +576,15 @@ export async function exportElementToPdf(
       border-top: 2px solid #000000 !important;
       border-bottom: 2px solid #000000 !important;
       vertical-align: middle !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
     }
     .amgas-pdf-export-container tfoot td[colspan],
     .amgas-pdf-export-container tfoot td:first-child {
       text-align: right !important;
-      padding-right: 12px !important;
+      padding: 6px 12px 6px 6px !important;
+      vertical-align: middle !important;
+      overflow: visible !important;
     }
     .amgas-pdf-export-container #report-signatures-block {
       border-top: 2px solid #000000 !important;
@@ -618,11 +693,11 @@ export async function exportElementToPdf(
       const tfoot = table.querySelector('tfoot');
       const allRows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
 
-      // Determine page capacity:
-      // Page 1 has header and filter summary; intermediate pages have header only.
+      // Determine page capacity based on page orientation:
+      // Portrait A4 (794x1123) accommodates more rows vertically than Landscape A4 (1123x794).
       const hasKpi = Boolean(kpiSummary);
-      const firstPageLimit = hasKpi ? 8 : 11;
-      const subsequentPageLimit = 13;
+      const firstPageLimit = orientation === 'portrait' ? (hasKpi ? 14 : 18) : (hasKpi ? 8 : 11);
+      const subsequentPageLimit = orientation === 'portrait' ? 20 : 13;
 
       if (allRows.length > firstPageLimit) {
         const pageRowSlices: HTMLTableRowElement[][] = [];
@@ -649,12 +724,11 @@ export async function exportElementToPdf(
           pageDiv.style.width = '100%';
           pageDiv.style.backgroundColor = '#ffffff';
           pageDiv.style.boxSizing = 'border-box';
-          pageDiv.style.padding = '14px 18px';
+          pageDiv.style.padding = orientation === 'portrait' ? '12px 14px' : '14px 18px';
           pageDiv.style.display = 'flex';
           pageDiv.style.flexDirection = 'column';
           pageDiv.style.justifyContent = 'space-between';
-          pageDiv.style.minHeight = '720px';
-          pageDiv.style.maxHeight = '745px';
+          pageDiv.style.minHeight = orientation === 'portrait' ? '1050px' : '720px';
           pageDiv.style.marginBottom = pageIdx < totalPages - 1 ? '16px' : '0';
 
           const topSection = document.createElement('div');
@@ -902,8 +976,9 @@ export async function exportElementToPdf(
         renderWidthMm = renderHeightMm * imgAspectRatio;
       }
 
+      const isReportDoc = clone.id === 'printable-report-section' || clone.querySelector('#printable-report-section') !== null;
       const posX = marginMm + (printableWidthMm - renderWidthMm) / 2;
-      const posY = marginMm + Math.max(0, (printableHeightMm - renderHeightMm) / 2);
+      const posY = isReportDoc ? marginMm : marginMm + Math.max(0, (printableHeightMm - renderHeightMm) / 2);
 
       const imgData = canvas.toDataURL('image/png', 1.0);
       pdf.addImage(imgData, 'PNG', posX, posY, renderWidthMm, renderHeightMm, undefined, 'FAST');

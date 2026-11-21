@@ -257,8 +257,33 @@ export function printReceiptSheet({
         padding: 0 !important;
         width: 100% !important;
       }
+      #printable-report-section .overflow-x-auto {
+        overflow: visible !important;
+      }
+      #printable-report-section table {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        table-layout: fixed !important;
+      }
+      .amgas-portrait #printable-report-section th,
+      .amgas-portrait #printable-report-section td {
+        font-size: 10.5px !important;
+        padding: 4px 2px !important;
+      }
       table {
         page-break-inside: auto;
+      }
+      th, td {
+        vertical-align: middle !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+      }
+      th {
+        line-height: 1.45 !important;
+      }
+      td {
+        line-height: 1.5 !important;
       }
       tr {
         page-break-inside: avoid !important;

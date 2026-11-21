@@ -3504,31 +3504,31 @@ export const GasProductionKardexView: React.FC<GasProductionKardexViewProps> = (
               </div>
 
               {/* Print Table */}
-              <table className="w-full text-right border-collapse text-[11px] border border-slate-300">
+              <table className="w-full text-right border-collapse text-[11px] border border-slate-300 leading-normal">
                 <thead>
-                  <tr className="bg-slate-100 border-b border-slate-300 font-bold">
-                    <th className="p-2 border-l border-slate-300 text-center w-10">ردیف</th>
-                    <th className="p-2 border-l border-slate-300 w-24 text-center">تاریخ</th>
-                    <th className="p-2 border-l border-slate-300">شرح سفارش / گردش</th>
-                    <th className="p-2 border-l border-slate-300 text-center w-28">نوع شیر</th>
-                    <th className="p-2 border-l border-slate-300 text-center w-28">نوع مهره</th>
-                    <th className="p-2 border-l border-slate-300 text-center w-32">سفارش دهنده</th>
-                    <th className="p-2 border-l border-slate-300 text-center w-20">تیراژ سفارش</th>
-                    <th className="p-2 border-l border-slate-300 text-center w-20">تحویل نهایی</th>
-                    <th className="p-2 border-l border-slate-300 text-center w-16">رد QC</th>
-                    <th className="p-2 border-l border-slate-300 text-center w-24 font-black">مانده انبار</th>
-                    <th className="p-2 text-center w-20">سرپرست</th>
+                  <tr className="bg-slate-100 border-b border-slate-300 font-bold leading-snug">
+                    <th className="p-2 border-l border-slate-300 text-center w-10 align-middle">ردیف</th>
+                    <th className="p-2 border-l border-slate-300 w-24 text-center align-middle">تاریخ</th>
+                    <th className="p-2 border-l border-slate-300 align-middle">شرح سفارش / گردش</th>
+                    <th className="p-2 border-l border-slate-300 text-center w-28 align-middle">نوع شیر</th>
+                    <th className="p-2 border-l border-slate-300 text-center w-28 align-middle">نوع مهره</th>
+                    <th className="p-2 border-l border-slate-300 text-center w-32 align-middle">سفارش دهنده</th>
+                    <th className="p-2 border-l border-slate-300 text-center w-20 align-middle">تیراژ سفارش</th>
+                    <th className="p-2 border-l border-slate-300 text-center w-20 align-middle">تحویل نهایی</th>
+                    <th className="p-2 border-l border-slate-300 text-center w-16 align-middle">رد QC</th>
+                    <th className="p-2 border-l border-slate-300 text-center w-24 font-black align-middle">مانده انبار</th>
+                    <th className="p-2 text-center w-20 align-middle">سرپرست</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-300">
                   {productEntries.map((item, idx) => (
-                    <tr key={item.entry_id}>
-                      <td className="p-1.5 border-l border-slate-300 text-center font-mono">{idx + 1}</td>
-                      <td className="p-1.5 border-l border-slate-300 text-center font-mono">{item.date}</td>
-                      <td className="p-1.5 border-l border-slate-300">{item.description}</td>
-                      <td className="p-1.5 border-l border-slate-300 text-center text-[10px]">
+                    <tr key={item.entry_id} className="leading-normal">
+                      <td className="p-1.5 border-l border-slate-300 text-center font-mono align-middle">{idx + 1}</td>
+                      <td className="p-1.5 border-l border-slate-300 text-center font-mono align-middle">{item.date}</td>
+                      <td className="p-1.5 border-l border-slate-300 align-middle">{item.description}</td>
+                      <td className="p-1.5 border-l border-slate-300 text-center text-[10px] align-middle">
                         {(item.cylinder_type === 'سیلندر لیفتراکی' || item.valve_type_2) ? (
-                          <div className="flex flex-col leading-tight">
+                          <div className="flex flex-col leading-snug">
                             <span>۱: {item.valve_type || 'شیر مایع'}</span>
                             <span className="text-slate-500">۲: {item.valve_type_2 || item.valve_type || 'شیر بخار'}</span>
                           </div>
@@ -3536,9 +3536,9 @@ export const GasProductionKardexView: React.FC<GasProductionKardexViewProps> = (
                           item.valve_type || 'شیر نو استاندارد ام‌گاز'
                         )}
                       </td>
-                      <td className="p-1.5 border-l border-slate-300 text-center text-[10px]">
+                      <td className="p-1.5 border-l border-slate-300 text-center text-[10px] align-middle">
                         {(item.cylinder_type === 'سیلندر لیفتراکی' || item.nut_type_2) ? (
-                          <div className="flex flex-col leading-tight">
+                          <div className="flex flex-col leading-snug">
                             <span>۱: {item.nut_type || 'مهره اول'}</span>
                             <span className="text-slate-500">۲: {item.nut_type_2 || item.nut_type || 'مهره دوم'}</span>
                           </div>
@@ -3546,12 +3546,12 @@ export const GasProductionKardexView: React.FC<GasProductionKardexViewProps> = (
                           item.nut_type || 'مهره 11/25/50 کیلویی بوتانی'
                         )}
                       </td>
-                      <td className="p-1.5 border-l border-slate-300 text-center font-bold">{item.customer_name || item.destination_or_source || '-'}</td>
-                      <td className="p-1.5 border-l border-slate-300 text-center font-mono font-bold">{item.production_in || '-'}</td>
-                      <td className="p-1.5 border-l border-slate-300 text-center font-mono font-bold">{item.dispatch_out || '-'}</td>
-                      <td className="p-1.5 border-l border-slate-300 text-center font-mono font-bold">{item.defect_reject || '-'}</td>
-                      <td className="p-1.5 border-l border-slate-300 text-center font-mono font-black text-indigo-900">{item.stock_balance}</td>
-                      <td className="p-1.5 text-center">{item.supervisor || '-'}</td>
+                      <td className="p-1.5 border-l border-slate-300 text-center font-bold align-middle">{item.customer_name || item.destination_or_source || '-'}</td>
+                      <td className="p-1.5 border-l border-slate-300 text-center font-mono font-bold align-middle">{item.production_in || '-'}</td>
+                      <td className="p-1.5 border-l border-slate-300 text-center font-mono font-bold align-middle">{item.dispatch_out || '-'}</td>
+                      <td className="p-1.5 border-l border-slate-300 text-center font-mono font-bold align-middle">{item.defect_reject || '-'}</td>
+                      <td className="p-1.5 border-l border-slate-300 text-center font-mono font-black text-indigo-900 align-middle">{item.stock_balance}</td>
+                      <td className="p-1.5 text-center align-middle">{item.supervisor || '-'}</td>
                     </tr>
                   ))}
                 </tbody>

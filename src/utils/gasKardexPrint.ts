@@ -490,14 +490,15 @@ export function printGasKardexDocument({
       table.kardex-print-table th,
       table.kardex-print-table td {
         word-break: normal !important;
-        overflow-wrap: normal !important;
+        overflow-wrap: break-word !important;
         font-size: 12px !important;
         font-weight: 800 !important;
-        padding: 2.5px 1.5px !important;
-        line-height: 1.3 !important;
+        padding: 4px 2px !important;
+        line-height: 1.5 !important;
+        vertical-align: middle !important;
         box-sizing: border-box !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
       }
       table.kardex-print-table td.kardex-desc-cell,
       table.kardex-print-table td.kardex-dispatched-cell {
@@ -506,16 +507,21 @@ export function printGasKardexDocument({
         text-overflow: clip !important;
         overflow-wrap: break-word !important;
         word-break: break-word !important;
-        line-height: 1.35 !important;
+        line-height: 1.45 !important;
+        vertical-align: middle !important;
         font-weight: 900 !important;
       }
       table.kardex-print-table th {
         font-size: 11.5px !important;
-        line-height: 1.2 !important;
+        line-height: 1.45 !important;
+        vertical-align: middle !important;
         font-weight: 900 !important;
       }
       table.kardex-print-table tfoot td {
         font-size: 12.5px !important;
+        line-height: 1.5 !important;
+        padding: 5px 4px !important;
+        vertical-align: middle !important;
         font-weight: 900 !important;
       }
       table.kardex-print-table td.numeric,

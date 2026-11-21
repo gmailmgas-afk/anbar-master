@@ -41,7 +41,6 @@ import {
   RefreshCw
 } from 'lucide-react';
 import {
-  formatCurrencyToman,
   formatNumberFa,
   toPersianDigits,
   toEnglishDigits,
@@ -84,7 +83,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'OUT_OF_STOCK' | 'CRITICAL' | 'WARN' | 'GOOD'>(initialStatusFilter);
-  const [sortBy, setSortBy] = useState<'DEFAULT' | 'STOCK_DESC' | 'STOCK_ASC' | 'VALUE_DESC' | 'PRICE_DESC' | 'NAME_ASC'>('DEFAULT');
+  const [sortBy, setSortBy] = useState<'DEFAULT' | 'STOCK_DESC' | 'STOCK_ASC' | 'NAME_ASC'>('DEFAULT');
   const [pageSize, setPageSize] = useState<number>(25);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [viewMode, setViewMode] = useState<'table' | 'cards'>(() => 
@@ -586,8 +585,6 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       const bStock = productStockTotals[b.product_id] || 0;
       if (sortBy === 'STOCK_DESC') return bStock - aStock;
       if (sortBy === 'STOCK_ASC') return aStock - bStock;
-      if (sortBy === 'VALUE_DESC') return (bStock * (b.purchase_price || 0)) - (aStock * (a.purchase_price || 0));
-      if (sortBy === 'PRICE_DESC') return (b.purchase_price || 0) - (a.purchase_price || 0);
       if (sortBy === 'NAME_ASC') return a.name.localeCompare(b.name);
       return 0; // Default creation order
     });
@@ -657,8 +654,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       shelf_location: shelfLoc,
       unit: unitCheck.cleanValue || 'عدد',
       min_stock: sanitizeNumber(newProduct.min_stock, 10, 0, 1000000),
-      purchase_price: sanitizeNumber(newProduct.purchase_price, 0, 0, 1000000000000),
-      sale_price: sanitizeNumber(newProduct.sale_price, 0, 0, 1000000000000),
+      purchase_price: 0,
+      sale_price: 0,
       barcode: barcodeCheck.cleanValue,
       description: descCheck.cleanValue,
       created_at: new Date().toISOString(),
@@ -764,8 +761,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       shelf_location: shelfLoc,
       unit: unitCheck.cleanValue || 'عدد',
       min_stock: sanitizeNumber(editProductForm.min_stock, 10, 0, 1000000),
-      purchase_price: sanitizeNumber(editProductForm.purchase_price, 0, 0, 1000000000000),
-      sale_price: sanitizeNumber(editProductForm.sale_price, 0, 0, 1000000000000),
+      purchase_price: editingProduct.purchase_price ?? 0,
+      sale_price: editingProduct.sale_price ?? 0,
       barcode: barcodeCheck.cleanValue,
       description: descCheck.cleanValue,
       user_edited: true,
@@ -1182,8 +1179,6 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 <option value="DEFAULT">پیش‌فرض</option>
                 <option value="STOCK_DESC">بیشترین موجودی</option>
                 <option value="STOCK_ASC">کمترین موجودی (کسری)</option>
-                <option value="VALUE_DESC">بیشترین ارزش سرمایه</option>
-                <option value="PRICE_DESC">گران‌ترین قیمت خرید</option>
                 <option value="NAME_ASC">حروف الفبا (نام کالا)</option>
               </select>
             </div>
@@ -1326,9 +1321,11 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                         <span className="font-mono text-slate-300 text-[11px]">{toPersianDigits(p.min_stock)} {p.unit}</span>
                       </div>
                       <div>
-                        <span className="text-[10px] text-slate-500 block">بهای خرید:</span>
-                        <span className="font-mono text-slate-200 text-[11px] font-bold">
-                          {p.purchase_price ? formatCurrencyToman(p.purchase_price) : '---'}
+                        <span className="text-[10px] text-slate-500 block">وضعیت موجودی:</span>
+                        <span className={`font-bold text-[11px] ${
+                          isZero ? 'text-rose-400' : isLow ? 'text-amber-400' : 'text-emerald-400'
+                        }`}>
+                          {isZero ? 'ناموجود' : isLow ? 'زیر نقطه سفارش' : 'مطلوب'}
                         </span>
                       </div>
                     </div>
@@ -1378,7 +1375,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   <th className="py-2.5 px-1.5 text-center font-bold text-slate-300 whitespace-nowrap">کل موجودی</th>
                   <th className="py-2.5 px-2 text-center font-bold text-slate-300 whitespace-nowrap">انبار</th>
                   <th className="py-2.5 px-2 text-center font-bold text-slate-300 whitespace-nowrap">کد قفسه</th>
-                  <th className="py-2.5 px-1.5 text-center font-bold text-slate-300 whitespace-nowrap">خرید / فروش</th>
+                  <th className="py-2.5 px-1.5 text-center font-bold text-slate-300 whitespace-nowrap">نقطه سفارش / وضعیت</th>
                   <th className="py-2.5 px-2 text-center font-bold text-slate-300 whitespace-nowrap sticky left-0 z-20 bg-slate-950 border-b border-slate-800 shadow-[4px_0_8px_rgba(0,0,0,0.5)] w-24">عملیات</th>
                 </tr>
               </thead>
@@ -1458,9 +1455,11 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                         </span>
                       </td>
 
-                      <td className="py-2 px-1.5 text-center font-mono whitespace-nowrap">
-                        <div className="text-[10px] text-slate-400">{formatCurrencyToman(p.purchase_price)}</div>
-                        <div className="text-xs font-bold text-emerald-400">{formatCurrencyToman(p.sale_price)}</div>
+                      <td className="py-2 px-1.5 text-center whitespace-nowrap">
+                        <div className="font-mono text-[10px] text-slate-400">حداقل: {toPersianDigits(p.min_stock)} {p.unit}</div>
+                        <div className={`text-[11px] font-bold ${totalQty <= 0 ? 'text-rose-400' : isLow ? 'text-amber-400' : 'text-emerald-400'}`}>
+                          {totalQty <= 0 ? 'ناموجود' : isLow ? 'نقطه سفارش' : 'مطلوب'}
+                        </div>
                       </td>
 
                       <td className="py-2 px-2 text-center align-middle whitespace-nowrap sticky left-0 z-10 bg-slate-900 group-hover:bg-slate-850 shadow-[4px_0_8px_rgba(0,0,0,0.5)] transition-colors w-20">
@@ -2042,7 +2041,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   />
                 </div>
 
-                <div>
+                <div className="sm:col-span-2">
                   <label className="block text-xs font-medium text-slate-300 mb-1">بارکد کالا</label>
                   <input
                     type="text"
@@ -2050,26 +2049,6 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     onChange={(e) => setNewProduct({ ...newProduct, barcode: e.target.value })}
                     className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
                     placeholder="62600..."
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">قیمت خرید تومان</label>
-                  <input
-                    type="number"
-                    value={newProduct.purchase_price}
-                    onChange={(e) => setNewProduct({ ...newProduct, purchase_price: Number(e.target.value) })}
-                    className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">قیمت فروش تومان</label>
-                  <input
-                    type="number"
-                    value={newProduct.sale_price}
-                    onChange={(e) => setNewProduct({ ...newProduct, sale_price: Number(e.target.value) })}
-                    className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
@@ -2128,7 +2107,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     <span className="text-amber-300 font-mono text-xs">{editingProduct.sku}</span>
                   </h3>
                   <p className="text-[11px] text-slate-400">
-                    به‌روزرسانی قیمت، موجودی، کد و نام کالا با همگام‌سازی فوری دیتابیس مرکزی
+                    به‌روزرسانی مشخصات، محل قفسه، کد و نام کالا با همگام‌سازی فوری دیتابیس مرکزی
                   </p>
                 </div>
               </div>
@@ -2300,34 +2279,12 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   />
                 </div>
 
-                <div>
+                <div className="sm:col-span-2">
                   <label className="block text-xs font-medium text-slate-300 mb-1">بارکد کالا</label>
                   <input
                     type="text"
                     value={editProductForm.barcode || ''}
                     onChange={(e) => setEditProductForm({ ...editProductForm, barcode: e.target.value })}
-                    className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">قیمت خرید (تومان)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={editProductForm.purchase_price ?? 0}
-                    onChange={(e) => setEditProductForm({ ...editProductForm, purchase_price: Number(e.target.value) })}
-                    className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">قیمت فروش (تومان)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={editProductForm.sale_price ?? 0}
-                    onChange={(e) => setEditProductForm({ ...editProductForm, sale_price: Number(e.target.value) })}
                     className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-amber-500"
                   />
                 </div>
