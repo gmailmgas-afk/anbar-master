@@ -90,7 +90,7 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
         description: desc,
         quantity: qty,
         quantityInWords: numberToPersianWords(qty),
-        remarks: movement.notes || (isDefective ? 'خروج شیر کهنه' : 'تحویل و خروج کالا از انبار')
+        remarks: ''
       });
     } else if (productionEntry) {
       const mainQty = productionEntry.dispatch_out > 0
@@ -103,7 +103,7 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
         description: `${productionEntry.cylinder_type} ${sub} - ساخت و تحویل از کارخانه ام‌گاز`,
         quantity: mainQty,
         quantityInWords: numberToPersianWords(mainQty),
-        remarks: 'تست هیدرواستاتیک و تایید کنترل کیفی QC'
+        remarks: ''
       });
 
       const isForklift = productionEntry.cylinder_type === 'سیلندر لیفتراکی' || productionEntry.cylinder_type?.includes('لیفتراک');
@@ -116,7 +116,7 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
             : `قطعه شیر نو نصب‌شده (${productionEntry.valve_type})`,
           quantity: mainQty,
           quantityInWords: numberToPersianWords(mainQty),
-          remarks: 'نصب‌شده روی بدنه کپسول / مخزن'
+          remarks: ''
         });
       }
 
@@ -127,7 +127,7 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
           description: `قطعه شیر دوم / بخار (${v2})`,
           quantity: mainQty,
           quantityInWords: numberToPersianWords(mainQty),
-          remarks: 'خروجی سوپاپ و گاز بخار مخصوص لیفتراک'
+          remarks: ''
         });
       }
 
@@ -139,7 +139,7 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
             : `قطعه مهره اتصال (${productionEntry.nut_type})`,
           quantity: mainQty,
           quantityInWords: numberToPersianWords(mainQty),
-          remarks: 'مونتاژ استاندارد خط تولید'
+          remarks: ''
         });
       }
 
@@ -150,7 +150,7 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
           description: `قطعه مهره دوم (${n2})`,
           quantity: mainQty,
           quantityInWords: numberToPersianWords(mainQty),
-          remarks: 'اتصال مهره دوم خط تولید لیفتراک'
+          remarks: ''
         });
       }
     } else if (entry) {
@@ -161,7 +161,7 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
           description: entry.cylinder_type ? `${entry.cylinder_type} گاز مایع ارسال و تحویل` : 'سیلندر گاز مایع 11 کیلوگرمی ارسال و تحویل',
           quantity: entry.cylinder_out,
           quantityInWords: numberToPersianWords(entry.cylinder_out),
-          remarks: entry.description || 'سالم و تست شده'
+          remarks: ''
         });
       }
 
@@ -182,7 +182,7 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
             description: `${v.valve_name} ${isNew ? '(شیر نو استاندارد)' : '(شیر کهنه)'}`,
             quantity: qty,
             quantityInWords: numberToPersianWords(qty),
-            remarks: entry.notes || entry.description || (isNew ? 'تحویل و خروج شیر نو تعویضی' : 'خروج شیر کهنه')
+            remarks: ''
           });
         });
       }
@@ -196,7 +196,7 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
           description: `${vName} ارسال و تحویل مشتری`,
           quantity: remainingNewValveOut,
           quantityInWords: numberToPersianWords(remainingNewValveOut),
-          remarks: entry.notes || entry.description || 'تحویل و خروج شیر نو تعویضی'
+          remarks: ''
         });
       }
 
@@ -209,7 +209,7 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
           description: `${vName} ارسال / اسقاط`,
           quantity: remainingUsedValveOut,
           quantityInWords: numberToPersianWords(remainingUsedValveOut),
-          remarks: entry.notes || entry.description || 'خروج شیر کهنه و اسقاط'
+          remarks: ''
         });
       }
 
@@ -220,7 +220,7 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
           description: 'ضایعات اسقاطی سیلندر گاز مایع',
           quantity: entry.scrap_out,
           quantityInWords: numberToPersianWords(entry.scrap_out),
-          remarks: 'اسقاطی غیرقابل شارژ'
+          remarks: ''
         });
       }
 
@@ -231,7 +231,7 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
           description: entry.cylinder_type ? `${entry.cylinder_type} گاز مایع` : 'سیلندر گاز مایع 11 کیلوگرمی',
           quantity: entry.cylinder_in,
           quantityInWords: numberToPersianWords(entry.cylinder_in),
-          remarks: 'توزیع و تحویل مقصد'
+          remarks: ''
         });
       }
       if (items.length === 0 && entry.new_valve_in > 0) {
@@ -240,7 +240,7 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
           description: 'شیر نو سیلندر گاز مایع',
           quantity: entry.new_valve_in,
           quantityInWords: numberToPersianWords(entry.new_valve_in),
-          remarks: 'تحویل مشتری'
+          remarks: ''
         });
       }
       if (items.length === 0 && entry.used_valve_in > 0) {
@@ -249,7 +249,7 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
           description: 'شیر کهنه سیلندر',
           quantity: entry.used_valve_in,
           quantityInWords: numberToPersianWords(entry.used_valve_in),
-          remarks: 'تحویل ضایعات'
+          remarks: ''
         });
       }
     }

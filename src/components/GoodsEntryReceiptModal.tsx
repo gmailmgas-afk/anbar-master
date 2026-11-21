@@ -86,7 +86,7 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
         quantity: qty,
         quantityInWords: numberToPersianWords(qty),
         freightCost: '',
-        remarks: movement.notes || (isDefective ? 'شیر کهنه دریافتی' : 'تحویل جهت انبار / تعمیر')
+        remarks: ''
       });
     } else if (entry) {
       // 1. Incoming cylinder
@@ -97,7 +97,7 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
           quantity: entry.cylinder_in,
           quantityInWords: numberToPersianWords(entry.cylinder_in),
           freightCost: '',
-          remarks: entry.description || 'جهت شارژ / بازبینی و تعمیر'
+          remarks: ''
         });
       }
 
@@ -119,7 +119,7 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
             quantity: qty,
             quantityInWords: numberToPersianWords(qty),
             freightCost: '',
-            remarks: entry.notes || entry.description || (isNew ? 'تحویل جهت نصب روی سیلندر' : 'شیر کهنه تعویض‌شده')
+            remarks: ''
           });
         });
       }
@@ -134,7 +134,7 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
           quantity: remainingNewValveIn,
           quantityInWords: numberToPersianWords(remainingNewValveIn),
           freightCost: '',
-          remarks: entry.notes || entry.description || 'تحویل جهت نصب روی سیلندر'
+          remarks: ''
         });
       }
 
@@ -148,7 +148,7 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
           quantity: remainingUsedValveIn,
           quantityInWords: numberToPersianWords(remainingUsedValveIn),
           freightCost: '',
-          remarks: entry.notes || entry.description || 'شیر کهنه تعویض‌شده'
+          remarks: ''
         });
       }
 
@@ -160,7 +160,7 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
           quantity: entry.cylinder_out,
           quantityInWords: numberToPersianWords(entry.cylinder_out),
           freightCost: '',
-          remarks: 'تحویل مشتری'
+          remarks: ''
         });
       }
 
@@ -172,7 +172,7 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
           quantity: entry.scrap_out,
           quantityInWords: numberToPersianWords(entry.scrap_out),
           freightCost: '',
-          remarks: 'غیرقابل استفاده'
+          remarks: ''
         });
       }
     }

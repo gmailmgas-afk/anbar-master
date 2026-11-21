@@ -234,20 +234,26 @@ export async function exportElementToPdf(
     .amgas-pdf-export-container .kardex-print-table th,
     .amgas-pdf-export-container #printable-gas-kardex th,
     .amgas-pdf-export-container #printable-production-kardex th {
-      font-size: 12px !important;
+      font-size: 11.5px !important;
       font-weight: 900 !important;
-      line-height: 1.25 !important;
-      padding: 3.5px 2px !important;
+      line-height: 1.45 !important;
+      padding: 5px 2px !important;
+      vertical-align: middle !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
       color: #020617 !important;
     }
     .amgas-pdf-export-container .kardex-table td,
     .amgas-pdf-export-container .kardex-print-table td,
     .amgas-pdf-export-container #printable-gas-kardex td,
     .amgas-pdf-export-container #printable-production-kardex td {
-      font-size: 12.5px !important;
+      font-size: 12px !important;
       font-weight: 800 !important;
-      line-height: 1.3 !important;
-      padding: 3.5px 2px !important;
+      line-height: 1.5 !important;
+      padding: 5px 2px !important;
+      vertical-align: middle !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
       color: #020617 !important;
     }
     .amgas-pdf-export-container #printable-gas-kardex tbody td:nth-child(3) {
@@ -256,7 +262,8 @@ export async function exportElementToPdf(
       text-overflow: clip !important;
       overflow-wrap: break-word !important;
       word-break: break-word !important;
-      line-height: 1.35 !important;
+      line-height: 1.45 !important;
+      vertical-align: middle !important;
       font-weight: 800 !important;
       text-align: center !important;
     }
@@ -266,7 +273,8 @@ export async function exportElementToPdf(
       text-overflow: clip !important;
       overflow-wrap: break-word !important;
       word-break: break-word !important;
-      line-height: 1.3 !important;
+      line-height: 1.45 !important;
+      vertical-align: middle !important;
       font-weight: 900 !important;
       text-align: center !important;
     }
@@ -274,11 +282,21 @@ export async function exportElementToPdf(
     .amgas-pdf-export-container .kardex-print-table tfoot td,
     .amgas-pdf-export-container #printable-gas-kardex tfoot td,
     .amgas-pdf-export-container #printable-production-kardex tfoot td {
-      font-size: 13px !important;
+      font-size: 12.5px !important;
       font-weight: 900 !important;
-      line-height: 1.3 !important;
-      padding: 4px 2px !important;
+      line-height: 1.5 !important;
+      padding: 6px 4px !important;
+      vertical-align: middle !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
       color: #020617 !important;
+    }
+    .amgas-pdf-export-container #printable-gas-kardex tfoot td[colspan],
+    .amgas-pdf-export-container #printable-gas-kardex tfoot td:first-child {
+      text-align: right !important;
+      padding: 6px 12px 6px 6px !important;
+      vertical-align: middle !important;
+      overflow: visible !important;
     }
     /* Receipt Specific Typography within PDF */
     .amgas-pdf-export-container .amgas-receipt-page th,
@@ -751,6 +769,19 @@ export async function exportElementToPdf(
     }
   }));
 
+  // Prevent Tailwind Preflight's global `img { display: block }` from breaking
+  // html2canvas's FontMetrics baseline probe (which places an inline 1x1 <img>
+  // next to a <span> in document.body to compute font baseline).
+  const metricsFixStyle = document.createElement('style');
+  metricsFixStyle.setAttribute('data-amgas-html2canvas-metrics-fix', 'true');
+  metricsFixStyle.textContent = `
+    body > div[style*="visibility: hidden"] > img[width="1"][height="1"][src^="data:image/gif;base64,R0lGODlhAQAB"] {
+      display: inline !important;
+      vertical-align: baseline !important;
+    }
+  `;
+  document.head.appendChild(metricsFixStyle);
+
   try {
     const isEntryReceipt = clone.id === 'goods-entry-print-sheet' || clone.querySelector('#goods-entry-print-sheet') !== null || clone.classList.contains('amgas-entry-page') || clone.querySelector('.amgas-entry-page') !== null;
     const isExitReceipt = clone.id === 'goods-exit-print-sheet' || clone.querySelector('#goods-exit-print-sheet') !== null || clone.classList.contains('amgas-exit-page') || clone.querySelector('.amgas-exit-page') !== null;
@@ -946,6 +977,9 @@ export async function exportElementToPdf(
     });
     return false;
   } finally {
+    if (document.head.contains(metricsFixStyle)) {
+      document.head.removeChild(metricsFixStyle);
+    }
     if (document.body.contains(container)) {
       document.body.removeChild(container);
     }

@@ -5307,25 +5307,25 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
                     <col style={{ width: '4.4%' }} />
                   </colgroup>
                   <thead>
-                    <tr className="bg-slate-200 border-b border-slate-400 text-center font-black text-[11px] sm:text-[11.5px] leading-tight text-slate-950">
-                      <th className="border border-slate-400 p-0.5 sm:p-1 font-black">ردیف</th>
-                      <th className="border border-slate-400 p-0.5 sm:p-1 font-black">تاریخ</th>
-                      <th className="border border-slate-400 p-0.5 sm:p-1 text-center font-black">شرح عملیات</th>
-                      <th className="border border-slate-400 p-0.5 sm:p-1 font-black">شماره<br/>برگه</th>
-                      <th className="border border-slate-400 p-0.5 sm:p-1 font-black">ورودی<br/>سیلندر</th>
-                      <th className="border border-slate-400 p-0.5 sm:p-1 font-black">خروجی<br/>سیلندر</th>
-                      <th className="border border-slate-400 p-0.5 sm:p-1 font-black">ضایعات<br/>واقعی</th>
-                      <th className="border border-slate-400 p-0.5 sm:p-1 bg-amber-50 text-amber-950 font-black">ضایعات<br/>سوری</th>
-                      <th className="border border-slate-400 p-0.5 sm:p-1 bg-slate-100 text-slate-950 font-black">مانده<br/>سیلندر</th>
-                      <th className="border border-slate-400 p-0.5 sm:p-1 bg-amber-100 text-amber-950 font-black">مانده<br/>ضایعات</th>
-                      <th className="border border-slate-400 p-0.5 sm:p-1 font-black">شیر نو<br/>(+)</th>
-                      <th className="border border-slate-400 p-0.5 sm:p-1 font-black">شیر نو<br/>(-)</th>
-                      <th className="border border-slate-400 p-0.5 sm:p-1 bg-slate-100 text-slate-950 font-black">مانده<br/>نو</th>
-                      <th className="border border-slate-400 p-0.5 sm:p-1 font-black">ارسالی /<br/>بارنامه</th>
-                      <th className="border border-slate-400 p-0.5 sm:p-1 font-black">داغی<br/>(+)</th>
-                      <th className="border border-slate-400 p-0.5 sm:p-1 font-black">داغی<br/>(-)</th>
-                      <th className="border border-slate-400 p-0.5 sm:p-1 bg-amber-100 text-amber-950 font-black">مانده<br/>داغی</th>
-                      <th className="border border-slate-400 p-0.5 sm:p-1 font-black">معیوب</th>
+                    <tr className="bg-slate-200 border-b border-slate-400 text-center font-black text-[11px] sm:text-[11.5px] leading-snug text-slate-950">
+                      <th className="border border-slate-400 px-1 py-1.5 align-middle font-black">ردیف</th>
+                      <th className="border border-slate-400 px-1 py-1.5 align-middle font-black">تاریخ</th>
+                      <th className="border border-slate-400 px-1 py-1.5 align-middle text-center font-black">شرح عملیات</th>
+                      <th className="border border-slate-400 px-1 py-1.5 align-middle font-black">شماره<br/>برگه</th>
+                      <th className="border border-slate-400 px-1 py-1.5 align-middle font-black">ورودی<br/>سیلندر</th>
+                      <th className="border border-slate-400 px-1 py-1.5 align-middle font-black">خروجی<br/>سیلندر</th>
+                      <th className="border border-slate-400 px-1 py-1.5 align-middle font-black">ضایعات<br/>واقعی</th>
+                      <th className="border border-slate-400 px-1 py-1.5 align-middle bg-amber-50 text-amber-950 font-black">ضایعات<br/>سوری</th>
+                      <th className="border border-slate-400 px-1 py-1.5 align-middle bg-slate-100 text-slate-950 font-black">مانده<br/>سیلندر</th>
+                      <th className="border border-slate-400 px-1 py-1.5 align-middle bg-amber-100 text-amber-950 font-black">مانده<br/>ضایعات</th>
+                      <th className="border border-slate-400 px-1 py-1.5 align-middle font-black">شیر نو<br/>(+)</th>
+                      <th className="border border-slate-400 px-1 py-1.5 align-middle font-black">شیر نو<br/>(-)</th>
+                      <th className="border border-slate-400 px-1 py-1.5 align-middle bg-slate-100 text-slate-950 font-black">مانده<br/>نو</th>
+                      <th className="border border-slate-400 px-1 py-1.5 align-middle font-black">ارسالی /<br/>بارنامه</th>
+                      <th className="border border-slate-400 px-1 py-1.5 align-middle font-black">داغی<br/>(+)</th>
+                      <th className="border border-slate-400 px-1 py-1.5 align-middle font-black">داغی<br/>(-)</th>
+                      <th className="border border-slate-400 px-1 py-1.5 align-middle bg-amber-100 text-amber-950 font-black">مانده<br/>داغی</th>
+                      <th className="border border-slate-400 px-1 py-1.5 align-middle font-black">معیوب</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -5336,46 +5336,46 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
                       const dispVal = resolveKardexDispatchedOrWaybill(row);
 
                       return (
-                        <tr key={row.entry_id || idx} className="text-center divide-x divide-slate-300 text-[11.5px] sm:text-[12px] font-extrabold text-slate-950">
-                          <td className="border border-slate-300 p-1 font-black">{toEnglishDigits(idx + 1)}</td>
-                          <td className="border border-slate-300 p-1 font-extrabold">{toEnglishDigits(row.date)}</td>
-                          <td className="border border-slate-300 px-1.5 py-1 text-center font-extrabold whitespace-pre-line break-words leading-snug align-middle">{wrappedDesc}</td>
-                          <td className="border border-slate-300 p-1 font-black">{toEnglishDigits(row.transfer_sheet_number) || '-'}</td>
-                          <td className="border border-slate-300 p-1 font-extrabold">{row.cylinder_in > 0 ? toEnglishDigits(formatNumberEn(row.cylinder_in)) : '-'}</td>
-                          <td className="border border-slate-300 p-1 font-extrabold">{row.cylinder_out > 0 ? toEnglishDigits(formatNumberEn(row.cylinder_out)) : '-'}</td>
-                          <td className="border border-slate-300 p-1 font-extrabold">{row.scrap_out > 0 ? toEnglishDigits(formatNumberEn(row.scrap_out)) : '-'}</td>
-                          <td className="border border-slate-300 p-1 bg-amber-50/50 text-amber-950 font-black">{(row.scrap_stock_in || 0) > 0 ? toEnglishDigits(formatNumberEn(row.scrap_stock_in)) : '-'}</td>
-                          <td className="border border-slate-300 p-1 bg-slate-50 text-slate-950 font-black">{toEnglishDigits(formatNumberEn(row.cylinder_balance))}</td>
-                          <td className="border border-slate-300 p-1 bg-amber-50 text-amber-950 font-black">{toEnglishDigits(formatNumberEn(Math.max(0, row.scrap_balance || 0)))}</td>
-                          <td className="border border-slate-300 p-1 font-extrabold">{row.new_valve_in > 0 ? toEnglishDigits(formatNumberEn(row.new_valve_in)) : '-'}</td>
-                          <td className="border border-slate-300 p-1 font-extrabold">{row.new_valve_out > 0 ? toEnglishDigits(formatNumberEn(row.new_valve_out)) : '-'}</td>
-                          <td className="border border-slate-300 p-1 bg-slate-50 text-slate-950 font-black">{toEnglishDigits(formatNumberEn(row.new_valve_balance))}</td>
-                          <td className="border border-slate-300 px-1 py-1 font-black whitespace-normal break-words leading-snug text-center align-middle">{dispVal ? toEnglishDigits(dispVal) : '-'}</td>
-                          <td className="border border-slate-300 p-1 font-extrabold">{row.used_valve_in > 0 ? toEnglishDigits(formatNumberEn(row.used_valve_in)) : '-'}</td>
-                          <td className="border border-slate-300 p-1 font-extrabold">{row.used_valve_out > 0 ? toEnglishDigits(formatNumberEn(row.used_valve_out)) : '-'}</td>
-                          <td className="border border-slate-300 p-1 bg-amber-50 text-amber-950 font-black">{toEnglishDigits(formatNumberEn(row.used_valve_balance))}</td>
-                          <td className="border border-slate-300 p-1 font-extrabold">{row.defective > 0 ? toEnglishDigits(formatNumberEn(row.defective)) : '-'}</td>
+                        <tr key={row.entry_id || idx} className="text-center divide-x divide-slate-300 text-[11.5px] sm:text-[12px] font-extrabold text-slate-950 leading-normal">
+                          <td className="border border-slate-300 px-1 py-1.5 align-middle font-black">{toEnglishDigits(idx + 1)}</td>
+                          <td className="border border-slate-300 px-1 py-1.5 align-middle font-extrabold">{toEnglishDigits(row.date)}</td>
+                          <td className="border border-slate-300 px-1.5 py-1.5 text-center font-extrabold whitespace-pre-line break-words leading-snug align-middle">{wrappedDesc}</td>
+                          <td className="border border-slate-300 px-1 py-1.5 align-middle font-black">{toEnglishDigits(row.transfer_sheet_number) || '-'}</td>
+                          <td className="border border-slate-300 px-1 py-1.5 align-middle font-extrabold">{row.cylinder_in > 0 ? toEnglishDigits(formatNumberEn(row.cylinder_in)) : '-'}</td>
+                          <td className="border border-slate-300 px-1 py-1.5 align-middle font-extrabold">{row.cylinder_out > 0 ? toEnglishDigits(formatNumberEn(row.cylinder_out)) : '-'}</td>
+                          <td className="border border-slate-300 px-1 py-1.5 align-middle font-extrabold">{row.scrap_out > 0 ? toEnglishDigits(formatNumberEn(row.scrap_out)) : '-'}</td>
+                          <td className="border border-slate-300 px-1 py-1.5 align-middle bg-amber-50/50 text-amber-950 font-black">{(row.scrap_stock_in || 0) > 0 ? toEnglishDigits(formatNumberEn(row.scrap_stock_in)) : '-'}</td>
+                          <td className="border border-slate-300 px-1 py-1.5 align-middle bg-slate-50 text-slate-950 font-black">{toEnglishDigits(formatNumberEn(row.cylinder_balance))}</td>
+                          <td className="border border-slate-300 px-1 py-1.5 align-middle bg-amber-50 text-amber-950 font-black">{toEnglishDigits(formatNumberEn(Math.max(0, row.scrap_balance || 0)))}</td>
+                          <td className="border border-slate-300 px-1 py-1.5 align-middle font-extrabold">{row.new_valve_in > 0 ? toEnglishDigits(formatNumberEn(row.new_valve_in)) : '-'}</td>
+                          <td className="border border-slate-300 px-1 py-1.5 align-middle font-extrabold">{row.new_valve_out > 0 ? toEnglishDigits(formatNumberEn(row.new_valve_out)) : '-'}</td>
+                          <td className="border border-slate-300 px-1 py-1.5 align-middle bg-slate-50 text-slate-950 font-black">{toEnglishDigits(formatNumberEn(row.new_valve_balance))}</td>
+                          <td className="border border-slate-300 px-1 py-1.5 font-black whitespace-normal break-words leading-snug text-center align-middle">{dispVal ? toEnglishDigits(dispVal) : '-'}</td>
+                          <td className="border border-slate-300 px-1 py-1.5 align-middle font-extrabold">{row.used_valve_in > 0 ? toEnglishDigits(formatNumberEn(row.used_valve_in)) : '-'}</td>
+                          <td className="border border-slate-300 px-1 py-1.5 align-middle font-extrabold">{row.used_valve_out > 0 ? toEnglishDigits(formatNumberEn(row.used_valve_out)) : '-'}</td>
+                          <td className="border border-slate-300 px-1 py-1.5 align-middle bg-amber-50 text-amber-950 font-black">{toEnglishDigits(formatNumberEn(row.used_valve_balance))}</td>
+                          <td className="border border-slate-300 px-1 py-1.5 align-middle font-extrabold">{row.defective > 0 ? toEnglishDigits(formatNumberEn(row.defective)) : '-'}</td>
                         </tr>
                       );
                     })}
                   </tbody>
                   <tfoot>
-                    <tr className="bg-slate-200 font-black border-t-2 border-slate-500 text-center text-[12px] sm:text-[12.5px] text-slate-950">
-                      <td colSpan={4} className="border border-slate-400 p-1 text-right font-black">تراز نهایی:</td>
-                      <td className="border border-slate-400 p-1 font-black">{toEnglishDigits(formatNumberEn(stats.totalCylinderIn))}</td>
-                      <td className="border border-slate-400 p-1 font-black">{toEnglishDigits(formatNumberEn(stats.totalCylinderOut))}</td>
-                      <td className="border border-slate-400 p-1 font-black">{toEnglishDigits(formatNumberEn(stats.totalScrapOut))}</td>
-                      <td className="border border-slate-400 p-1 bg-amber-100 text-amber-950 font-black">{toEnglishDigits(formatNumberEn(stats.totalScrapStockIn))}</td>
-                      <td className="border border-slate-400 p-1 font-black bg-slate-200 text-slate-950">{toEnglishDigits(formatNumberEn(stats.currentCylinders))}</td>
-                      <td className="border border-slate-400 p-1 font-black bg-amber-100 text-amber-950">{toEnglishDigits(formatNumberEn(stats.currentScrap))}</td>
-                      <td className="border border-slate-400 p-1 font-black">{toEnglishDigits(formatNumberEn(stats.totalNewValveIn))}</td>
-                      <td className="border border-slate-400 p-1 font-black">{toEnglishDigits(formatNumberEn(stats.totalNewValveOut))}</td>
-                      <td className="border border-slate-400 p-1 font-black bg-slate-200 text-slate-950">{toEnglishDigits(formatNumberEn(stats.currentNewValves))}</td>
-                      <td className="border border-slate-400 p-1 font-black">{toEnglishDigits(formatNumberEn(stats.totalDispatched))}</td>
-                      <td className="border border-slate-400 p-1 font-black">{toEnglishDigits(formatNumberEn(stats.totalUsedValveIn))}</td>
-                      <td className="border border-slate-400 p-1 font-black">{toEnglishDigits(formatNumberEn(stats.totalUsedValveOut))}</td>
-                      <td className="border border-slate-400 p-1 font-black bg-amber-100 text-amber-950">{toEnglishDigits(formatNumberEn(stats.currentUsedValves))}</td>
-                      <td className="border border-slate-400 p-1 font-black">{toEnglishDigits(formatNumberEn(stats.totalDefective))}</td>
+                    <tr className="bg-slate-200 font-black border-t-2 border-slate-500 text-center text-[12px] sm:text-[12.5px] leading-normal text-slate-950">
+                      <td colSpan={4} className="border border-slate-400 px-2.5 py-1.5 align-middle text-right font-black leading-normal">تراز نهایی:</td>
+                      <td className="border border-slate-400 px-1 py-1.5 align-middle font-black">{toEnglishDigits(formatNumberEn(stats.totalCylinderIn))}</td>
+                      <td className="border border-slate-400 px-1 py-1.5 align-middle font-black">{toEnglishDigits(formatNumberEn(stats.totalCylinderOut))}</td>
+                      <td className="border border-slate-400 px-1 py-1.5 align-middle font-black">{toEnglishDigits(formatNumberEn(stats.totalScrapOut))}</td>
+                      <td className="border border-slate-400 px-1 py-1.5 align-middle bg-amber-100 text-amber-950 font-black">{toEnglishDigits(formatNumberEn(stats.totalScrapStockIn))}</td>
+                      <td className="border border-slate-400 px-1 py-1.5 align-middle font-black bg-slate-200 text-slate-950">{toEnglishDigits(formatNumberEn(stats.currentCylinders))}</td>
+                      <td className="border border-slate-400 px-1 py-1.5 align-middle font-black bg-amber-100 text-amber-950">{toEnglishDigits(formatNumberEn(stats.currentScrap))}</td>
+                      <td className="border border-slate-400 px-1 py-1.5 align-middle font-black">{toEnglishDigits(formatNumberEn(stats.totalNewValveIn))}</td>
+                      <td className="border border-slate-400 px-1 py-1.5 align-middle font-black">{toEnglishDigits(formatNumberEn(stats.totalNewValveOut))}</td>
+                      <td className="border border-slate-400 px-1 py-1.5 align-middle font-black bg-slate-200 text-slate-950">{toEnglishDigits(formatNumberEn(stats.currentNewValves))}</td>
+                      <td className="border border-slate-400 px-1 py-1.5 align-middle font-black">{toEnglishDigits(formatNumberEn(stats.totalDispatched))}</td>
+                      <td className="border border-slate-400 px-1 py-1.5 align-middle font-black">{toEnglishDigits(formatNumberEn(stats.totalUsedValveIn))}</td>
+                      <td className="border border-slate-400 px-1 py-1.5 align-middle font-black">{toEnglishDigits(formatNumberEn(stats.totalUsedValveOut))}</td>
+                      <td className="border border-slate-400 px-1 py-1.5 align-middle font-black bg-amber-100 text-amber-950">{toEnglishDigits(formatNumberEn(stats.currentUsedValves))}</td>
+                      <td className="border border-slate-400 px-1 py-1.5 align-middle font-black">{toEnglishDigits(formatNumberEn(stats.totalDefective))}</td>
                     </tr>
                   </tfoot>
                 </table>
