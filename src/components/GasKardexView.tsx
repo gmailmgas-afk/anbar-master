@@ -138,6 +138,17 @@ export const summarizeKardexDescription = (
     return 'ورود اکسل';
   }
 
+  const isSystemBoilerplateDesc =
+    !clean ||
+    clean.startsWith('ورودی تاییدشده') ||
+    clean.startsWith('دریافت و ورود محموله') ||
+    clean.startsWith('ارسال و خروج محموله') ||
+    clean.startsWith('ثبت سریع');
+
+  if (!isSystemBoilerplateDesc) {
+    return clean.length > 30 ? clean.slice(0, 28) + '…' : clean;
+  }
+
   const cylType = entry?.cylinder_type || activeCylinderType || 'سیلندر 11 کیلویی';
   const normCyl = normalizeCylinderType(cylType);
   const formattedCylName = normCyl.startsWith('سیلندر') ? normCyl : (normCyl.includes('سیلندر') ? normCyl : `سیلندر ${normCyl}`);
@@ -631,6 +642,7 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
     notes: '',
     valve_items: []
   });
+  const [isManualDescription, setIsManualDescription] = useState<boolean>(false);
 
   // Form State for New Customer
   const [newCustomerForm, setNewCustomerForm] = useState({
@@ -1418,6 +1430,7 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
       notes: `نوع قلم وارده: ${insp.item_name} ${insp.notes ? `| ${insp.notes}` : ''}`,
       valve_items: isCylinder ? undefined : segregatedItemsForTarget
     });
+    setIsManualDescription(false);
     setShowAddEntryModal(true);
     showToast(
       isCustomerValve
@@ -1545,6 +1558,7 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
       defective: 0,
       notes: ''
     });
+    setIsManualDescription(false);
     setShowAddEntryModal(true);
   };
 
@@ -2147,6 +2161,7 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
       defective: 0,
       notes: ''
     });
+    setIsManualDescription(false);
 
     if (calculatedNewValveBal < 0 || calculatedUsedValveBal < 0) {
       showToast(`ردیف در کاردکس «${currentCustomer.name}» ثبت شد. هشدار: به دلیل مانده منفی شیرآلات، کسری از موجودی خود ام‌گاز کسر گردید.`, 'info');
@@ -4752,29 +4767,88 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
-                  شرح رویداد / اقلام بار *
-                </label>
-                <select
-                  value={newEntry.description}
-                  onChange={e => setNewEntry({ ...newEntry, description: e.target.value })}
-                  required
-                  className="w-full text-xs bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-hidden focus:border-amber-500 cursor-pointer font-medium"
-                >
-                  <option value="" disabled>
-                    -- انتخاب شرح از لیست اقلام تعریف‌شده --
-                  </option>
-                  {newEntry.description && !customItemNames.includes(newEntry.description) && (
-                    <option value={newEntry.description}>
-                      {newEntry.description} (مقدار فعلی)
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <label className="block text-xs font-medium text-slate-300">
+                    شرح رویداد / اقلام بار *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isManualDescription) {
+                        setIsManualDescription(false);
+                      } else {
+                        setIsManualDescription(true);
+                        if (customItemNames.includes(newEntry.description)) {
+                          setNewEntry(prev => ({ ...prev, description: '' }));
+                        }
+                      }
+                    }}
+                    className={`text-[10.5px] px-2 py-0.5 rounded-lg border font-semibold transition-colors cursor-pointer flex items-center gap-1 ${
+                      isManualDescription
+                        ? 'bg-indigo-950/70 border-indigo-600/60 text-indigo-300 hover:bg-indigo-900/70'
+                        : 'bg-amber-950/60 border-amber-700/60 text-amber-300 hover:bg-amber-900/60'
+                    }`}
+                  >
+                    {isManualDescription ? (
+                      <>
+                        <List className="w-3 h-3" />
+                        <span>انتخاب از لیست اقلام</span>
+                      </>
+                    ) : (
+                      <>
+                        <Edit3 className="w-3 h-3" />
+                        <span>ورود دستی (موارد استثنا)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {!isManualDescription ? (
+                  <select
+                    value={newEntry.description}
+                    onChange={e => {
+                      if (e.target.value === '__MANUAL_EXCEPTION__') {
+                        setIsManualDescription(true);
+                        setNewEntry(prev => ({
+                          ...prev,
+                          description: customItemNames.includes(prev.description) ? '' : prev.description
+                        }));
+                        return;
+                      }
+                      setNewEntry({ ...newEntry, description: e.target.value });
+                    }}
+                    required
+                    className="w-full text-xs bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-hidden focus:border-amber-500 cursor-pointer font-medium"
+                  >
+                    <option value="" disabled>
+                      -- انتخاب شرح از لیست اقلام تعریف‌شده --
                     </option>
-                  )}
-                  {customItemTypes.map(it => (
-                    <option key={it.id} value={it.name}>
-                      {it.name}
+                    {newEntry.description && !customItemNames.includes(newEntry.description) && (
+                      <option value={newEntry.description}>
+                        {newEntry.description} (مقدار فعلی)
+                      </option>
+                    )}
+                    {customItemTypes.map(it => (
+                      <option key={it.id} value={it.name}>
+                        {it.name}
+                      </option>
+                    ))}
+                    <option value="__MANUAL_EXCEPTION__">
+                      ✍️ ورود دستی شرح (موارد استثنا)...
                     </option>
-                  ))}
-                </select>
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    autoFocus
+                    required
+                    maxLength={500}
+                    value={newEntry.description}
+                    onChange={e => setNewEntry({ ...newEntry, description: e.target.value })}
+                    placeholder="شرح مورد استثنا را به صورت دستی وارد کنید *"
+                    className="w-full text-xs bg-slate-950 border border-amber-500/70 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:outline-hidden focus:border-amber-400 font-medium"
+                  />
+                )}
               </div>
 
               {/* Unified 15-Column Kardex Strip Layout: فیلدهای ورودی در یک ردیف جدول مطابق نمای کاردکس */}
