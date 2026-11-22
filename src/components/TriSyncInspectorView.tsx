@@ -8,7 +8,7 @@ import {
   DEFAULT_CLIENT_STATIONS
 } from '../types';
 import { LocalStorageManager, LocalDatabaseState } from '../database/storage';
-import { SyncEngine, getCentralServerUrl, CLOUDFLARE_WORKER_URL } from '../sync-engine/sync-client';
+import { SyncEngine, getCentralServerUrl, CLOUDFLARE_WORKER_URL, IntranetStatus } from '../sync-engine/sync-client';
 import {
   Database,
   Cloud,
@@ -38,7 +38,11 @@ import {
   RotateCcw,
   AlertTriangle,
   Trash2,
-  PackageX
+  PackageX,
+  Network,
+  Copy,
+  Radio,
+  Link2
 } from 'lucide-react';
 import { UsersManagementView } from './UsersManagementView';
 import { CylinderTanksCatalogView } from './CylinderTanksCatalogView';
@@ -158,6 +162,90 @@ export const TriSyncInspectorView: React.FC<TriSyncInspectorViewProps> = ({
   const [activeStationId, setActiveStationId] = useState<string>(() => getDefaultStationForEnv(currentEnv));
   const [countdown, setCountdown] = useState<number>(SyncEngine.getRemainingSeconds());
   const [, setDataVersion] = useState<number>(0);
+
+  // Hybrid Intranet LAN state (active on Windows Desktop Installers)
+  const [intranetStatus, setIntranetStatus] = useState<IntranetStatus | null>(null);
+  const [intranetLoadedOnce, setIntranetLoadedOnce] = useState(false);
+  const [selectedRoleInput, setSelectedRoleInput] = useState<'HUB' | 'CLIENT' | 'AUTO'>('AUTO');
+  const [manualHubIpInput, setManualHubIpInput] = useState('');
+  const [manualHubPortInput, setManualHubPortInput] = useState('3000');
+  const [isSavingIntranetCfg, setIsSavingIntranetCfg] = useState(false);
+  const [intranetMsg, setIntranetMsg] = useState<string | null>(null);
+  const [isPingingHub, setIsPingingHub] = useState(false);
+  const [copiedShareUrl, setCopiedShareUrl] = useState<string | null>(null);
+
+  const refreshIntranetStatus = async (syncInputs = false) => {
+    const st = await SyncEngine.getIntranetStatus();
+    setIntranetStatus(st);
+    if (st && (!intranetLoadedOnce || syncInputs)) {
+      const r = st.role === 'HUB' || st.role === 'CLIENT' ? st.role : 'AUTO';
+      setSelectedRoleInput(r);
+      setManualHubIpInput(st.manual_hub_ip || '');
+      setManualHubPortInput(String(st.manual_hub_port || 3000));
+      setIntranetLoadedOnce(true);
+    }
+  };
+
+  useEffect(() => {
+    refreshIntranetStatus(true);
+    const t = setInterval(() => {
+      refreshIntranetStatus(false);
+    }, 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  const handleSaveIntranetConfig = async () => {
+    setIsSavingIntranetCfg(true);
+    setIntranetMsg(null);
+    try {
+      const parsedPort = parseInt(manualHubPortInput, 10);
+      const res = await SyncEngine.updateIntranetConfig({
+        role: selectedRoleInput,
+        manual_hub_ip: manualHubIpInput.trim(),
+        manual_hub_port: !isNaN(parsedPort) && parsedPort > 0 && parsedPort < 65535 ? parsedPort : 3000
+      });
+      if (res) {
+        setIntranetStatus(res);
+        setIntranetMsg(`تنظیمات با موفقیت ذخیره شد (نقش مؤثر: ${res.effective_role === 'HUB' ? 'میزبان مرکزی LAN (HUB)' : 'کلاینت متصل به میزبان (CLIENT)'}).`);
+      } else {
+        setIntranetMsg('امکان ذخیره تنظیمات وجود ندارد؛ لطفاً از اجرای نسخه نصبی روی ویندوز اطمینان حاصل کنید.');
+      }
+    } finally {
+      setIsSavingIntranetCfg(false);
+    }
+  };
+
+  const handlePingHub = async () => {
+    const targetIp = manualHubIpInput.trim() ||
+      (intranetStatus?.active_hub_url ? intranetStatus.active_hub_url.replace(/^https?:\/\//, '').split(':')[0] : '');
+    const parsedPort = parseInt(manualHubPortInput, 10) || 3000;
+    if (!targetIp) {
+      setIntranetMsg('هیچ آدرس IP میزبانی برای تست انتخاب یا کشف نشده است.');
+      return;
+    }
+    setIsPingingHub(true);
+    setIntranetMsg(null);
+    try {
+      const res = await SyncEngine.pingIntranetPeer(targetIp, parsedPort);
+      if (res?.reachable) {
+        setIntranetMsg(`✅ ارتباط مستقیم اینترانت با ${targetIp}:${parsedPort} برقرار است (زمان پاسخ: ${toPersianDigits(res.latency_ms || 1)} میلی‌ثانیه).`);
+      } else {
+        setIntranetMsg(`❌ عدم دسترسی به ${targetIp}:${parsedPort} — فایروال ویندوز (پورت ۳۰۰۰ TCP) یا اتصال شبکه داخلی را بررسی کنید.`);
+      }
+    } finally {
+      setIsPingingHub(false);
+    }
+  };
+
+  const handleCopyShareUrl = (url: string) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(url);
+      }
+      setCopiedShareUrl(url);
+      setTimeout(() => setCopiedShareUrl(null), 2000);
+    } catch {}
+  };
 
   // Subscribe to LocalStorageManager so local/remote sync updates reflect immediately
   useEffect(() => {
@@ -928,6 +1016,268 @@ export const TriSyncInspectorView: React.FC<TriSyncInspectorViewProps> = ({
             )}
           </div>
         </div>
+      </div>
+
+      {/* Hybrid Intranet (Offline LAN + Cloud Sync) Panel */}
+      <div className="bg-slate-900 border border-cyan-800/40 rounded-2xl p-5 shadow-lg space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className={`w-11 h-11 rounded-xl border flex items-center justify-center shrink-0 ${
+              intranetStatus?.is_desktop_server
+                ? 'bg-cyan-950/80 border-cyan-600/50 text-cyan-400'
+                : 'bg-slate-950 border-slate-700 text-slate-400'
+            }`}>
+              <Network className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm font-black text-white">
+                  شبکه داخلی اینترانت (همگام‌سازی فوری بین کلاینت‌ها بدون اینترنت)
+                </h3>
+                {intranetStatus?.is_desktop_server ? (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                    فعال روی نسخه نصبی ویندوز
+                  </span>
+                ) : (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-bold">
+                    مخصوص فایل‌های نصبی ویندوز
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
+                سیستم‌های ویندوز در شبکه محلی (کابل شبکه / وای‌فای داخلی) بدون نیاز به اینترنت همدیگر را روی پورت <span className="font-mono text-cyan-300">UDP 3001</span> پیدا کرده و روی پورت <span className="font-mono text-cyan-300">TCP 3000</span> به‌صورت لحظه‌ای سینک می‌شوند؛ پس از وصل شدن اینترنت، داده‌ها خودکار به ابر منتقل می‌گردند.
+              </p>
+            </div>
+          </div>
+
+          {intranetStatus?.is_desktop_server && (
+            <button
+              type="button"
+              onClick={() => refreshIntranetStatus(false)}
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1.5 border border-slate-700 cursor-pointer shrink-0 self-start md:self-auto"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
+              <span>بروزرسانی شبکه LAN</span>
+            </button>
+          )}
+        </div>
+
+        {intranetStatus?.is_desktop_server ? (
+          <>
+            {/* Telemetry Summary Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+                <div className="text-[11px] text-slate-400">نقش فعال این سیستم در LAN</div>
+                <div className="text-sm font-black text-cyan-300 mt-1 flex items-center gap-1.5">
+                  <Server className="w-4 h-4 text-cyan-400" />
+                  <span>
+                    {intranetStatus.effective_role === 'HUB'
+                      ? 'میزبان مرکزی شبکه (HUB)'
+                      : 'کلاینت متصل به میزبان (CLIENT)'}
+                  </span>
+                </div>
+                <div className="text-[10px] font-mono text-slate-400 mt-1 truncate">
+                  {intranetStatus.hostname} ({intranetStatus.node_id})
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+                <div className="text-[11px] text-slate-400">نشانی اشتراک‌گذاری این سیستم در LAN</div>
+                <div className="flex items-center justify-between gap-2 mt-1">
+                  <span className="text-xs font-mono font-bold text-emerald-300 truncate" dir="ltr">
+                    {intranetStatus.primary_url || 'http://localhost:3000'}
+                  </span>
+                  {intranetStatus.primary_url && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopyShareUrl(intranetStatus.primary_url!)}
+                      className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-200 flex items-center gap-1 cursor-pointer shrink-0"
+                    >
+                      {copiedShareUrl === intranetStatus.primary_url ? (
+                        <Check className="w-3 h-3 text-emerald-400" />
+                      ) : (
+                        <Copy className="w-3 h-3" />
+                      )}
+                      <span>{copiedShareUrl === intranetStatus.primary_url ? 'کپی شد' : 'کپی'}</span>
+                    </button>
+                  )}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-1">
+                  کلاینت‌های دیگر از این IP برای اتصال مستقیم استفاده می‌کنند
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+                <div className="text-[11px] text-slate-400">میزبان متصل فعلی و توالی LAN</div>
+                <div className="text-xs font-mono font-bold text-indigo-300 mt-1 truncate" dir="ltr">
+                  {intranetStatus.effective_role === 'HUB'
+                    ? 'Self Authoritative Hub'
+                    : (intranetStatus.active_hub_url || 'در جستجوی خودکار Hub...')}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-1">
+                  توالی دفتر کل LAN: <span className="font-mono text-white font-bold">{toPersianDigits(intranetStatus.server_sequence || 1000)}</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+                <div className="text-[11px] text-slate-400">اسناد آماده ارسال به ابر (در انتظار اینترنت)</div>
+                <div className={`text-lg font-black font-mono mt-0.5 ${
+                  (intranetStatus.unsynced_to_cloud_count || 0) > 0 ? 'text-amber-400' : 'text-emerald-400'
+                }`}>
+                  {toPersianDigits(intranetStatus.unsynced_to_cloud_count || 0)}
+                  <span className="text-[11px] font-normal text-slate-400 mr-1.5">رویداد</span>
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">
+                  کل دفتر کل محلی: {toPersianDigits(intranetStatus.ledger_events_count || 0)} رویداد
+                </div>
+              </div>
+            </div>
+
+            {/* Configuration Form (Role + Manual Hub IP) */}
+            <div className="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800 space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                <div className="md:col-span-4">
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                    نقش این سیستم در شبکه داخلی:
+                  </label>
+                  <select
+                    value={selectedRoleInput}
+                    onChange={(e) => setSelectedRoleInput(e.target.value as 'HUB' | 'CLIENT' | 'AUTO')}
+                    className="w-full bg-slate-900 border border-slate-700 text-slate-100 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-cyan-500"
+                  >
+                    <option value="AUTO">خودکار هوشمند (AUTO - پیشنهادی برای انبار)</option>
+                    <option value="HUB">میزبان اصلی شبکه محلی (HUB - پیشنهادی برای آفیس)</option>
+                    <option value="CLIENT">کلاینت متصل به میزبان (CLIENT)</option>
+                  </select>
+                </div>
+
+                <div className="md:col-span-3">
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                    IP دستی میزبان (اختیاری - برای زیرشبکه‌های مجزا):
+                  </label>
+                  <input
+                    type="text"
+                    value={manualHubIpInput}
+                    onChange={(e) => setManualHubIpInput(e.target.value)}
+                    placeholder="مثال: 192.168.1.10"
+                    dir="ltr"
+                    disabled={selectedRoleInput === 'HUB'}
+                    className="w-full bg-slate-900 border border-slate-700 text-slate-100 text-xs font-mono rounded-lg px-3 py-2 focus:outline-none focus:border-cyan-500 disabled:opacity-40"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">پورت TCP میزبان:</label>
+                  <input
+                    type="number"
+                    value={manualHubPortInput}
+                    onChange={(e) => setManualHubPortInput(e.target.value)}
+                    dir="ltr"
+                    disabled={selectedRoleInput === 'HUB'}
+                    className="w-full bg-slate-900 border border-slate-700 text-slate-100 text-xs font-mono rounded-lg px-3 py-2 focus:outline-none focus:border-cyan-500 disabled:opacity-40"
+                  />
+                </div>
+
+                <div className="md:col-span-3 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveIntranetConfig}
+                    disabled={isSavingIntranetCfg}
+                    className="flex-1 px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{isSavingIntranetCfg ? 'در حال ذخیره...' : 'ذخیره تنظیمات'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePingHub}
+                    disabled={isPingingHub || selectedRoleInput === 'HUB'}
+                    className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 cursor-pointer disabled:opacity-40"
+                    title="تست ارتباط با میزبان اینترانت"
+                  >
+                    {isPingingHub ? '...' : 'تست اتصال'}
+                  </button>
+                </div>
+              </div>
+
+              {intranetMsg && (
+                <div className="p-2.5 rounded-lg bg-slate-900 border border-cyan-700/40 text-xs text-cyan-200 font-medium">
+                  {intranetMsg}
+                </div>
+              )}
+            </div>
+
+            {/* Live Discovered Peers in LAN */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <Radio className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>سیستم‌های کشف‌شده هم‌اکنون در شبکه محلی ({toPersianDigits(intranetStatus.peers?.length || 0)} دستگاه):</span>
+                </span>
+                <span className="text-[10px] text-slate-500 font-mono">
+                  پورت کشف خودکار: UDP {toPersianDigits(intranetStatus.udp_port || 3001)}
+                </span>
+              </div>
+
+              {intranetStatus.peers && intranetStatus.peers.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                  {intranetStatus.peers.map((peer) => (
+                    <div
+                      key={peer.node_id}
+                      className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between gap-2"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                          <span className="text-xs font-bold text-white truncate">{peer.hostname}</span>
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-bold border ${
+                            peer.role === 'HUB'
+                              ? 'bg-cyan-950 text-cyan-300 border-cyan-700/50'
+                              : 'bg-slate-900 text-slate-300 border-slate-700'
+                          }`}>
+                            {peer.role}
+                          </span>
+                        </div>
+                        <div className="text-[11px] font-mono text-cyan-300 mt-0.5" dir="ltr">
+                          {peer.ip}:{peer.port}
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">
+                          توالی: {toPersianDigits(peer.sequence)} •{' '}
+                          {peer.has_cloud ? 'دارای دسترسی به ابر' : 'اینترانت محلی'}
+                        </div>
+                      </div>
+                      {selectedRoleInput !== 'HUB' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setManualHubIpInput(peer.ip);
+                            setManualHubPortInput(String(peer.port || 3000));
+                          }}
+                          className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-cyan-700 text-slate-200 hover:text-white text-[10px] font-bold cursor-pointer shrink-0 flex items-center gap-1"
+                        >
+                          <Link2 className="w-3 h-3" />
+                          <span>انتخاب میزبان</span>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 text-xs text-slate-400">
+                  هم‌اکنون سیستم دیگری در شبکه محلی شناسایی نشده است؛ به محض اجرای نسخه نصبی روی رایانه دیگر در همین شبکه محلی (LAN / Wi-Fi)، به‌صورت خودکار در اینجا ظاهر شده و همگام‌سازی فوری آغاز می‌شود.
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-slate-300 leading-relaxed flex items-start gap-2.5">
+            <Info className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+            <span>
+              شما هم‌اکنون در نسخه تحت وب (<span className="font-mono text-emerald-400">anbar.mgas.ir</span>) هستید. موتور شبکه داخلی اینترانت (ارتباط لحظه‌ای بین رایانه‌های آفیس و انبار بدون اینترنت روی پورت‌های ۳۰۰۰ TCP و ۳۰۰۱ UDP) درون فایل‌های نصبی ویندوز تعبیه شده و به محض اجرا روی ویندوز ۷ یا ۱۱ به‌طور خودکار فعال می‌گردد.
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Network of 15 Installed Client Workstations Grid */}

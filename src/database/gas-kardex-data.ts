@@ -198,7 +198,7 @@ export function recalculateKardexBalances(entries: GasKardexEntry[], isSegregate
         dispatched: resolvedDisp || (item.dispatched !== undefined && item.dispatched !== null && String(item.dispatched).trim() !== '' && String(item.dispatched).trim() !== '0' && String(item.dispatched).trim() !== '۰'
           ? String(item.dispatched)
           : ''),
-        waybill_number: item.waybill_number || (resolvedDisp && !isNaN(Number(resolvedDisp)) ? resolvedDisp : undefined),
+        waybill_number: item.waybill_number || (resolvedDisp || undefined),
         used_valve_in: usedValveIn,
         used_valve_out: usedValveOut,
         used_valve_balance: usedValveBal,

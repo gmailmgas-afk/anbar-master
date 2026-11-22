@@ -220,9 +220,11 @@ interface StoredSyncEvent {
   server_received_at: string;
   server_sequence: number;
   schema_version: number;
+  cloud_synced?: boolean;
 }
 
 let currentSequence = 1000;
+let lastCloudSequence = 0;
 const eventStore: StoredSyncEvent[] = [];
 const eventIdToSeqMap = new Map<string, number>();
 
@@ -272,6 +274,15 @@ function persistEvents(immediate: boolean = false) {
 // Health endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString(), port: PORT });
+});
+
+app.get('/api/intranet/status', (_req, res) => {
+  res.json({
+    success: true,
+    is_desktop_server: false,
+    mode: 'cloud_web',
+    lan_enabled: false
+  });
 });
 
 // ==============================================================================
@@ -1070,112 +1081,176 @@ app.post(['/api/database/purge-all-except-products', '/api/database/manager-purg
 const sseClients = new Set<express.Response>();
 const CLOUDFLARE_WORKER_URL = process.env.CLOUDFLARE_WORKER_URL || 'https://anbar.mgas.ir';
 
-// Automatically relay new sync events to Cloudflare D1 central database
-async function relayEventsToCloudflare(events: any[], device_id: string) {
-  if (!events || events.length === 0) return;
+// Automatically relay new sync events to Cloudflare D1 central database and track confirmation
+async function relayEventsToCloudflare(events: StoredSyncEvent[], device_id: string): Promise<boolean> {
+  if (!events || events.length === 0) return true;
   try {
     const resp = await fetch(`${CLOUDFLARE_WORKER_URL}/api/sync/events`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify({ events, device_id }),
-      signal: AbortSignal.timeout(2000)
+      signal: AbortSignal.timeout(4500)
     });
-    if (resp.ok) {
+    if (!resp.ok) return false;
+    const data = await resp.json().catch(() => null) as any;
+    if (data && data.success) {
+      const acceptedIds = new Set<string>(
+        Array.isArray(data.accepted_events) ? data.accepted_events.map((a: any) => a?.event_id).filter(Boolean) : []
+      );
+      let updated = false;
+      for (const ev of events) {
+        if (acceptedIds.size === 0 || acceptedIds.has(ev.event_id)) {
+          if (!ev.cloud_synced) {
+            ev.cloud_synced = true;
+            updated = true;
+          }
+        }
+      }
+      if (updated) persistEvents();
       console.log(`[Cloudflare D1 Sync] Forwarded ${events.length} event(s) to central cloud.`);
+      return true;
     }
-  } catch (err: any) {
-    // Offline mode or unreachable - quiet fallback
+    return false;
+  } catch {
+    return false;
   }
 }
 
-// Automatically pull missing events & purge markers from Cloudflare D1 central database
+let isFlushingCloudRelays = false;
+async function flushPendingCloudRelays() {
+  if (isFlushingCloudRelays) return;
+  const pending = eventStore.filter(e => e.cloud_synced === false);
+  if (pending.length === 0) return;
+  isFlushingCloudRelays = true;
+  try {
+    for (let i = 0; i < pending.length; i += 50) {
+      const batch = pending.slice(i, i + 50);
+      const ok = await relayEventsToCloudflare(batch, batch[0]?.device_id || 'SERVER-RELAY');
+      if (!ok) break;
+    }
+  } finally {
+    isFlushingCloudRelays = false;
+  }
+}
+
+// Automatically pull missing events & purge markers from Cloudflare D1 central database (paginated with independent cloud cursor)
 let isPullingCloudflare = false;
 async function pullEventsFromCloudflare(forcedSinceSeq?: number) {
   if (isPullingCloudflare) return;
   isPullingCloudflare = true;
   try {
-    const seq = forcedSinceSeq !== undefined ? forcedSinceSeq : Math.max(0, currentSequence - 50);
-    const resp = await fetch(`${CLOUDFLARE_WORKER_URL}/api/sync?since_sequence=${seq}`, {
-      headers: { 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(2000)
-    });
-    if (!resp.ok) return;
-    const data = await resp.json() as any;
+    let cursor = forcedSinceSeq !== undefined ? forcedSinceSeq : Math.max(0, lastCloudSequence - 20);
+    const newlyAdded: StoredSyncEvent[] = [];
 
-    // 1. Check if Cloud D1 recorded a newer database purge
-    if (data && data.last_purged_at) {
-      const cloudPurgeMs = new Date(data.last_purged_at).getTime();
-      const localPurgeMs = lastServerPurgedAt ? new Date(lastServerPurgedAt).getTime() : 0;
-      if (!isNaN(cloudPurgeMs) && cloudPurgeMs > localPurgeMs) {
-        applyAuthoritativePurge({
-          purgedAt: data.last_purged_at,
-          preserveProducts: data.purge_preserve_products !== false,
-          author: 'CLOUDFLARE_D1'
-        });
-      }
-    }
+    for (let page = 0; page < 25; page++) {
+      const resp = await fetch(`${CLOUDFLARE_WORKER_URL}/api/sync?since_sequence=${cursor}`, {
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(4000)
+      });
+      if (!resp.ok) break;
+      const data = await resp.json() as any;
+      if (!data || !data.success) break;
 
-    const activePurgeMs = lastServerPurgedAt ? new Date(lastServerPurgedAt).getTime() : 0;
-
-    if (data && Array.isArray(data.events) && data.events.length > 0) {
-      const newlyAdded: StoredSyncEvent[] = [];
-      for (const ev of data.events) {
-        if (!ev || !ev.event_id) continue;
-
-        // Skip historical pre-purge events (except USER records)
-        if (activePurgeMs > 0 && ev.entity_type !== 'USER' && ev.entity_type !== 'SYSTEM') {
-          const evTimeStr = ev.server_received_at || ev.client_created_at;
-          const evMs = evTimeStr ? new Date(evTimeStr).getTime() : 0;
-          if (evMs > 0 && evMs <= activePurgeMs) continue;
+      // 1. Check if Cloud D1 recorded a newer database purge
+      if (data.last_purged_at) {
+        const cloudPurgeMs = new Date(data.last_purged_at).getTime();
+        const localPurgeMs = lastServerPurgedAt ? new Date(lastServerPurgedAt).getTime() : 0;
+        if (!isNaN(cloudPurgeMs) && cloudPurgeMs > localPurgeMs) {
+          applyAuthoritativePurge({
+            purgedAt: data.last_purged_at,
+            preserveProducts: data.purge_preserve_products !== false,
+            author: 'CLOUDFLARE_D1'
+          });
         }
+      }
 
-        if (!eventIdToSeqMap.has(ev.event_id)) {
-          currentSequence = Math.max(currentSequence + 1, ev.server_sequence || (currentSequence + 1));
-          eventIdToSeqMap.set(ev.event_id, currentSequence);
-          const stored: StoredSyncEvent = {
-            ...ev,
-            server_received_at: ev.server_received_at || new Date().toISOString(),
-            server_sequence: currentSequence,
-            schema_version: ev.schema_version || 1
-          };
-          eventStore.push(stored);
-          newlyAdded.push(stored);
-          if (stored.entity_type === 'USER' && stored.payload) {
-            try {
-              const uPayload = typeof stored.payload === 'string' ? JSON.parse(stored.payload) : stored.payload;
-              applyServerUserSyncPayload(uPayload, stored.event_type);
-            } catch {}
+      const activePurgeMs = lastServerPurgedAt ? new Date(lastServerPurgedAt).getTime() : 0;
+
+      if (Array.isArray(data.events) && data.events.length > 0) {
+        for (const ev of data.events) {
+          if (!ev || !ev.event_id) continue;
+
+          const rawSeq = Number(ev.server_sequence || 0);
+          if (rawSeq > lastCloudSequence) lastCloudSequence = rawSeq;
+
+          // Skip historical pre-purge events (except USER records)
+          if (activePurgeMs > 0 && ev.entity_type !== 'USER' && ev.entity_type !== 'SYSTEM') {
+            const evTimeStr = ev.server_received_at || ev.client_created_at;
+            const evMs = evTimeStr ? new Date(evTimeStr).getTime() : 0;
+            if (evMs > 0 && evMs <= activePurgeMs) continue;
+          }
+
+          if (!eventIdToSeqMap.has(ev.event_id)) {
+            currentSequence = Math.max(currentSequence + 1, rawSeq || (currentSequence + 1));
+            eventIdToSeqMap.set(ev.event_id, currentSequence);
+            const stored: StoredSyncEvent = {
+              ...ev,
+              server_received_at: ev.server_received_at || new Date().toISOString(),
+              server_sequence: currentSequence,
+              schema_version: ev.schema_version || 1,
+              cloud_synced: true
+            };
+            eventStore.push(stored);
+            newlyAdded.push(stored);
+            if (stored.entity_type === 'USER' && stored.payload) {
+              try {
+                const uPayload = typeof stored.payload === 'string' ? JSON.parse(stored.payload) : stored.payload;
+                applyServerUserSyncPayload(uPayload, stored.event_type);
+              } catch {}
+            }
+          } else {
+            const existingEv = eventStore.find(e => e.event_id === ev.event_id);
+            if (existingEv && !existingEv.cloud_synced) {
+              existingEv.cloud_synced = true;
+            }
           }
         }
       }
-      if (newlyAdded.length > 0) {
-        persistEvents();
-        if (sseClients.size > 0) {
-          const livePayload = JSON.stringify({
-            type: 'SYNC_EVENTS',
-            events: newlyAdded,
-            server_sequence: currentSequence,
-            last_purged_at: lastServerPurgedAt,
-            timestamp: new Date().toISOString()
-          });
-          sseClients.forEach(client => {
-            try { client.write(`data: ${livePayload}\n\n`); } catch { sseClients.delete(client); }
-          });
-        }
+
+      const maxCloudSeq = Number(data.max_server_sequence || data.server_sequence || 0);
+      if (maxCloudSeq > lastCloudSequence) lastCloudSequence = maxCloudSeq;
+
+      const nextCursor = Number(data.next_since_sequence || 0);
+      if (data.has_more === true && nextCursor > cursor) {
+        cursor = nextCursor;
+      } else {
+        break;
       }
     }
-  } catch (err: any) {
+
+    if (newlyAdded.length > 0) {
+      persistEvents();
+      if (sseClients.size > 0) {
+        const livePayload = JSON.stringify({
+          type: 'SYNC_EVENTS',
+          events: newlyAdded,
+          server_sequence: currentSequence,
+          last_purged_at: lastServerPurgedAt,
+          timestamp: new Date().toISOString()
+        });
+        sseClients.forEach(client => {
+          try { client.write(`data: ${livePayload}\n\n`); } catch { sseClients.delete(client); }
+        });
+      }
+    }
+  } catch {
     // Quiet offline fallback
   } finally {
     isPullingCloudflare = false;
   }
 }
 
-// Initial pull on server boot
-setTimeout(() => pullEventsFromCloudflare(0), 1000);
+// Initial pull & pending relay flush on server boot
+setTimeout(() => {
+  flushPendingCloudRelays().catch(() => {});
+  pullEventsFromCloudflare(0).catch(() => {});
+}, 1000);
 
-// Background sync every 10 seconds with Cloudflare D1
-setInterval(() => pullEventsFromCloudflare(), 10000);
+// Background sync every 8 seconds with Cloudflare D1 (flush un-relayed events + pull new ones)
+setInterval(() => {
+  flushPendingCloudRelays().catch(() => {});
+  pullEventsFromCloudflare().catch(() => {});
+}, 8000);
 
 // Real-time Cloud Connection Diagnostic Endpoint
 app.get('/api/sync/status', async (req, res) => {
@@ -1306,7 +1381,7 @@ app.get('/api/sync/stream', (req, res) => {
   res.on('error', cleanup);
 });
 
-app.post('/api/sync/events', (req, res) => {
+app.post('/api/sync/events', async (req, res) => {
   try {
     const { events = [], device_id = 'UNKNOWN' } = req.body || {};
     const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || '127.0.0.1';
@@ -1353,7 +1428,8 @@ app.post('/api/sync/events', (req, res) => {
           device_id: ev.device_id || device_id,
           server_received_at: new Date().toISOString(),
           server_sequence: seq,
-          schema_version: ev.schema_version || 1
+          schema_version: ev.schema_version || 1,
+          cloud_synced: false
         };
 
         eventStore.push(storedEvent);
@@ -1395,14 +1471,23 @@ app.post('/api/sync/events', (req, res) => {
     }
 
     // Persist synchronously to disk immediately so a quick page refresh never loses newly saved events, then relay to Cloudflare D1
+    let cloudSynced = newStoredEvents.length === 0;
     if (newStoredEvents.length > 0) {
       persistEvents(true);
-      relayEventsToCloudflare(newStoredEvents, device_id).catch(() => {});
+      try {
+        cloudSynced = await Promise.race([
+          relayEventsToCloudflare(newStoredEvents, device_id),
+          new Promise<boolean>(resolve => setTimeout(() => resolve(false), 2500))
+        ]);
+      } catch {
+        cloudSynced = false;
+      }
     }
 
     res.json({
       success: true,
       accepted_events,
+      cloud_synced: cloudSynced,
       current_server_sequence: currentSequence,
       last_purged_at: lastServerPurgedAt,
       timestamp: new Date().toISOString()
@@ -1412,10 +1497,13 @@ app.post('/api/sync/events', (req, res) => {
   }
 });
 
-app.get('/api/sync', (req, res) => {
+app.get('/api/sync', async (req, res) => {
   try {
-    // Always opportunistically reconcile with Cloudflare D1
-    pullEventsFromCloudflare().catch(() => {});
+    // Wait briefly for Cloudflare D1 reconciliation before returning so refreshes immediately see remote user edits
+    await Promise.race([
+      pullEventsFromCloudflare(),
+      new Promise(resolve => setTimeout(resolve, 1200))
+    ]).catch(() => {});
 
     const sinceSeq = parseInt(String(req.query.since_sequence || '0'), 10);
     const purgeTimeMs = lastServerPurgedAt ? new Date(lastServerPurgedAt).getTime() : 0;

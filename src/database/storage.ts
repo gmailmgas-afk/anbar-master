@@ -421,6 +421,8 @@ export class LocalStorageManager {
     };
   }
 
+  private static idbMicrotaskScheduled: Partial<Record<RuntimeEnvironment, boolean>> = {};
+
   private static persistStateToClient(env: RuntimeEnvironment, state: LocalDatabaseState) {
     if (typeof window === 'undefined') return;
 
@@ -430,13 +432,14 @@ export class LocalStorageManager {
     try {
       window.localStorage.setItem(key, JSON.stringify(compactState));
     } catch (err) {
-      // QuotaExceededError fallback: strip historical CONFIRMED sync_events copies from localStorage
-      // while preserving 100% of gas_kardex_entries, stock_movements, goods_receipts, inspections, and PENDING queue,
-      // and immediately flush full state to IndexedDB.
+      // QuotaExceededError fallback: trim logs/notifications first, then historical sync_events
+      // while preserving 100% of gas_kardex_entries, stock_movements, goods_receipts, inspections, and PENDING queue.
       try {
         const ultraCompactState: LocalDatabaseState = {
           ...compactState,
-          sync_events: (compactState.sync_events || []).slice(-100)
+          audit_logs: (compactState.audit_logs || []).slice(0, 40),
+          notifications: (compactState.notifications || []).slice(0, 30),
+          sync_events: (compactState.sync_events || []).slice(-150)
         };
         window.localStorage.setItem(key, JSON.stringify(ultraCompactState));
       } catch (innerErr) {
@@ -445,14 +448,21 @@ export class LocalStorageManager {
       this.saveStateToIndexedDB(env, state).catch(() => {});
     }
 
-    // 2. Debounced background write to IndexedDB
+    // 2. Immediate coalesced microtask write to IndexedDB (0ms delay so rapid F5 refresh never loses mutations)
     if (this.persistDebounceTimers[env]) {
       clearTimeout(this.persistDebounceTimers[env]);
+      delete this.persistDebounceTimers[env];
     }
 
-    this.persistDebounceTimers[env] = setTimeout(() => {
-      this.saveStateToIndexedDB(env, state).catch(() => {});
-    }, 60);
+    if (!this.idbMicrotaskScheduled[env]) {
+      this.idbMicrotaskScheduled[env] = true;
+      const schedule = typeof queueMicrotask === 'function' ? queueMicrotask : (fn: () => void) => setTimeout(fn, 0);
+      schedule(() => {
+        this.idbMicrotaskScheduled[env] = false;
+        const latest = this.states[env] || state;
+        this.saveStateToIndexedDB(env, latest).catch(() => {});
+      });
+    }
   }
 
   /**
@@ -2992,6 +3002,35 @@ export class LocalStorageManager {
     );
   }
 
+  private static parseTimeMs(val: any): number {
+    if (!val) return 0;
+    const ms = new Date(val).getTime();
+    return isNaN(ms) ? 0 : ms;
+  }
+
+  private static shouldApplyIncomingMutation(existingRecord: any, incomingPayload: any, event: SyncEvent): boolean {
+    if (!existingRecord || event.event_type === 'DELETE') return true;
+    const existingMs = Math.max(
+      this.parseTimeMs(existingRecord.updated_at),
+      this.parseTimeMs(existingRecord.created_at)
+    );
+    const incomingMs = Math.max(
+      this.parseTimeMs(incomingPayload?.updated_at),
+      this.parseTimeMs(incomingPayload?.created_at),
+      this.parseTimeMs(event.client_created_at),
+      this.parseTimeMs((event as any).server_received_at)
+    );
+    // Prevent a replayed/older CREATE event from overwriting an existing record
+    if (event.event_type === 'CREATE') {
+      if (!incomingMs || !existingMs || incomingMs <= existingMs) return false;
+    }
+    // Prevent an older UPDATE event from overwriting a newer record
+    if (existingMs > 0 && incomingMs > 0 && incomingMs < existingMs) {
+      return false;
+    }
+    return true;
+  }
+
   // Internal helper to apply entity mutations locally
   static applyPayloadToLocalState(state: LocalDatabaseState, event: SyncEvent) {
     const payload = event.payload;
@@ -3012,7 +3051,9 @@ export class LocalStorageManager {
         if (event.event_type === 'DELETE') {
           if (idx >= 0) state.stock_movements.splice(idx, 1);
         } else if (idx >= 0) {
-          state.stock_movements[idx] = { ...state.stock_movements[idx], ...mov };
+          if (this.shouldApplyIncomingMutation(state.stock_movements[idx], mov, event)) {
+            state.stock_movements[idx] = { ...state.stock_movements[idx], ...mov };
+          }
         } else if (mov) {
           state.stock_movements.push(mov);
         }
@@ -3025,7 +3066,10 @@ export class LocalStorageManager {
         if (event.event_type === 'DELETE') {
           if (idx >= 0) state.products.splice(idx, 1);
         } else if (idx >= 0) {
-          state.products[idx] = { ...state.products[idx], ...prod, user_edited: true, updated_at: new Date().toISOString() };
+          if (this.shouldApplyIncomingMutation(state.products[idx], prod, event)) {
+            const resolvedUpdatedAt = prod?.updated_at || event.client_created_at || state.products[idx].updated_at || new Date().toISOString();
+            state.products[idx] = { ...state.products[idx], ...prod, user_edited: true, updated_at: resolvedUpdatedAt };
+          }
         } else if (prod) {
           state.products.push({ ...prod, user_edited: true });
         }
@@ -3044,7 +3088,10 @@ export class LocalStorageManager {
           }
           this.markEntityPermanentlyDeleted(targetId);
         } else if (idx >= 0) {
-          state.customers[idx] = { ...state.customers[idx], ...cust, updated_at: new Date().toISOString() };
+          if (this.shouldApplyIncomingMutation(state.customers[idx], cust, event)) {
+            const resolvedUpdatedAt = cust?.updated_at || event.client_created_at || state.customers[idx].updated_at || new Date().toISOString();
+            state.customers[idx] = { ...state.customers[idx], ...cust, updated_at: resolvedUpdatedAt };
+          }
         } else if (cust) {
           state.customers.push(cust);
         }
@@ -3058,7 +3105,10 @@ export class LocalStorageManager {
         if (event.event_type === 'DELETE') {
           if (idx >= 0) state.categories.splice(idx, 1);
         } else if (idx >= 0) {
-          state.categories[idx] = { ...state.categories[idx], ...cat, updated_at: new Date().toISOString() };
+          if (this.shouldApplyIncomingMutation(state.categories[idx], cat, event)) {
+            const resolvedUpdatedAt = cat?.updated_at || event.client_created_at || (event as any).server_received_at || state.categories[idx].updated_at || new Date().toISOString();
+            state.categories[idx] = { ...state.categories[idx], ...cat, updated_at: resolvedUpdatedAt };
+          }
         } else if (cat) {
           state.categories.push(cat);
         }
@@ -3077,7 +3127,10 @@ export class LocalStorageManager {
           }
           this.markEntityPermanentlyDeleted(targetId);
         } else if (idx >= 0) {
-          state.suppliers[idx] = { ...state.suppliers[idx], ...sup, updated_at: new Date().toISOString() };
+          if (this.shouldApplyIncomingMutation(state.suppliers[idx], sup, event)) {
+            const resolvedUpdatedAt = sup?.updated_at || event.client_created_at || (event as any).server_received_at || state.suppliers[idx].updated_at || new Date().toISOString();
+            state.suppliers[idx] = { ...state.suppliers[idx], ...sup, updated_at: resolvedUpdatedAt };
+          }
         } else if (sup) {
           state.suppliers.push(sup);
         }
@@ -3117,7 +3170,10 @@ export class LocalStorageManager {
         if (event.event_type === 'DELETE') {
           if (idx >= 0) state.invoices.splice(idx, 1);
         } else if (idx >= 0) {
-          state.invoices[idx] = { ...state.invoices[idx], ...inv, updated_at: new Date().toISOString() };
+          if (this.shouldApplyIncomingMutation(state.invoices[idx], inv, event)) {
+            const resolvedUpdatedAt = inv?.updated_at || event.client_created_at || (event as any).server_received_at || state.invoices[idx].updated_at || new Date().toISOString();
+            state.invoices[idx] = { ...state.invoices[idx], ...inv, updated_at: resolvedUpdatedAt };
+          }
         } else if (inv) {
           state.invoices.push(inv);
         }
@@ -3171,7 +3227,13 @@ export class LocalStorageManager {
         if (event.event_type === 'DELETE') {
           if (idx >= 0) state.gas_kardex_entries = state.gas_kardex_entries.filter(k => k.entry_id !== targetId);
         } else if (idx >= 0) {
-          state.gas_kardex_entries = state.gas_kardex_entries.map(k => k.entry_id === targetId ? { ...k, ...gk, updated_at: new Date().toISOString() } : k);
+          const existing = state.gas_kardex_entries[idx];
+          if (this.shouldApplyIncomingMutation(existing, gk, event)) {
+            const resolvedUpdatedAt = gk?.updated_at || event.client_created_at || (event as any).server_received_at || existing.updated_at || new Date().toISOString();
+            state.gas_kardex_entries = state.gas_kardex_entries.map(k =>
+              k.entry_id === targetId ? { ...k, ...gk, updated_at: resolvedUpdatedAt } : k
+            );
+          }
         } else if (gk) {
           state.gas_kardex_entries.push(gk);
         }
@@ -3193,7 +3255,13 @@ export class LocalStorageManager {
             state.stock_movements = state.stock_movements.filter(m => !m.movement_id.startsWith(`MOV-RCP-${targetId}`));
           }
         } else if (idx >= 0) {
-          state.goods_receipts = state.goods_receipts.map(r => r.receipt_id === targetId ? { ...r, ...rc, updated_at: new Date().toISOString() } : r);
+          const existing = state.goods_receipts[idx];
+          if (this.shouldApplyIncomingMutation(existing, rc, event)) {
+            const resolvedUpdatedAt = rc?.updated_at || event.client_created_at || (event as any).server_received_at || existing.updated_at || new Date().toISOString();
+            state.goods_receipts = state.goods_receipts.map(r =>
+              r.receipt_id === targetId ? { ...r, ...rc, updated_at: resolvedUpdatedAt } : r
+            );
+          }
         } else if (rc) {
           state.goods_receipts = [rc, ...state.goods_receipts];
         }
@@ -3207,9 +3275,13 @@ export class LocalStorageManager {
         if (event.event_type === 'DELETE') {
           if (idx >= 0) state.cylinder_valve_inspections = state.cylinder_valve_inspections.filter(i => i.inspection_id !== targetId);
         } else if (idx >= 0) {
-          const updatedInsp = { ...state.cylinder_valve_inspections[idx], ...insp, updated_at: new Date().toISOString() };
-          state.cylinder_valve_inspections = state.cylinder_valve_inspections.map(i => i.inspection_id === targetId ? updatedInsp : i);
-          this.syncInspectionToWarehouseAndInventory(state, updatedInsp, insp?.inspector_user_id || 'USR-003');
+          const existing = state.cylinder_valve_inspections[idx];
+          if (this.shouldApplyIncomingMutation(existing, insp, event)) {
+            const resolvedUpdatedAt = insp?.updated_at || event.client_created_at || (event as any).server_received_at || existing.updated_at || new Date().toISOString();
+            const updatedInsp = { ...existing, ...insp, updated_at: resolvedUpdatedAt };
+            state.cylinder_valve_inspections = state.cylinder_valve_inspections.map(i => i.inspection_id === targetId ? updatedInsp : i);
+            this.syncInspectionToWarehouseAndInventory(state, updatedInsp, insp?.inspector_user_id || 'USR-003');
+          }
         } else if (insp) {
           state.cylinder_valve_inspections = [insp, ...state.cylinder_valve_inspections];
           this.syncInspectionToWarehouseAndInventory(state, insp, insp.inspector_user_id || 'USR-003');
@@ -3224,7 +3296,13 @@ export class LocalStorageManager {
         if (event.event_type === 'DELETE') {
           if (idx >= 0) state.gas_production_kardex_entries = state.gas_production_kardex_entries.filter(k => k.entry_id !== targetId);
         } else if (idx >= 0) {
-          state.gas_production_kardex_entries = state.gas_production_kardex_entries.map(k => k.entry_id === targetId ? { ...k, ...pk, updated_at: new Date().toISOString() } : k);
+          const existing = state.gas_production_kardex_entries[idx];
+          if (this.shouldApplyIncomingMutation(existing, pk, event)) {
+            const resolvedUpdatedAt = pk?.updated_at || event.client_created_at || (event as any).server_received_at || existing.updated_at || new Date().toISOString();
+            state.gas_production_kardex_entries = state.gas_production_kardex_entries.map(k =>
+              k.entry_id === targetId ? { ...k, ...pk, updated_at: resolvedUpdatedAt } : k
+            );
+          }
         } else if (pk) {
           state.gas_production_kardex_entries.push(pk);
         }

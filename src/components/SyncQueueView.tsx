@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SyncQueueItem, RuntimeEnvironment, User } from '../types';
 import { LocalStorageManager } from '../database/storage';
-import { SyncEngine, LiveLogEntry, CLOUDFLARE_WORKER_URL } from '../sync-engine/sync-client';
+import { SyncEngine, LiveLogEntry, CLOUDFLARE_WORKER_URL, IntranetStatus } from '../sync-engine/sync-client';
 import {
   Send,
   RefreshCw,
@@ -55,12 +55,16 @@ export const SyncQueueView: React.FC<SyncQueueViewProps> = ({
   const [logFilter, setLogFilter] = useState<'all' | 'error' | 'd1' | 'sse'>('all');
   const [copiedLogs, setCopiedLogs] = useState(false);
   const [isTestingPing, setIsTestingPing] = useState(false);
+  const [intranetStatus, setIntranetStatus] = useState<IntranetStatus | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const unsubscribe = SyncEngine.subscribeLogs((newLogs) => {
       setLogs(newLogs);
     });
+    SyncEngine.getIntranetStatus().then((st) => {
+      if (st?.is_desktop_server) setIntranetStatus(st);
+    }).catch(() => {});
     return () => unsubscribe();
   }, []);
 
@@ -344,12 +348,17 @@ export const SyncQueueView: React.FC<SyncQueueViewProps> = ({
               <Terminal className="w-4 h-4" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-xs sm:text-sm font-bold text-white">باکس لاگ زنده برنامه و پایگاه داده ابری (Live Sync Console)</h3>
                 <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 text-[10px] font-medium">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                  <span>متصل به کلودفلر D1</span>
+                  <span>{intranetStatus?.is_desktop_server ? 'متصل به موتور هیبرید اینترانت + کلودفلر' : 'متصل به کلودفلر D1'}</span>
                 </span>
+                {intranetStatus?.is_desktop_server && (
+                  <span className="px-2 py-0.5 rounded-full bg-cyan-950/80 border border-cyan-700/60 text-cyan-300 text-[10px] font-mono font-bold">
+                    LAN {intranetStatus.effective_role} • {toPersianDigits(intranetStatus.peers?.length || 0)} همتا
+                  </span>
+                )}
               </div>
               <p className="text-[11px] text-slate-400 mt-0.5">
                 ثبت بلادرنگ تبادل داده بین دیتابیس محلی کلاینت و پایگاه داده ابری مرکزی Cloudflare

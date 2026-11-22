@@ -2058,6 +2058,7 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
       new_valve_out: 0,
       new_valve_balance: 0,
       dispatched: '',
+      waybill_number: '',
       used_valve_in: 0,
       used_valve_out: 0,
       used_valve_balance: 0,
@@ -4977,7 +4978,7 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
                         <td className="p-0.5 border-x border-slate-800">
                           <input
                             type="text"
-                            value={newEntry.dispatched !== undefined && newEntry.dispatched !== null && String(newEntry.dispatched) !== '0' && String(newEntry.dispatched) !== '۰' ? String(newEntry.dispatched) : ''}
+                            value={newEntry.dispatched ?? ''}
                             onChange={e => {
                               const val = e.target.value;
                               setNewEntry(prev => ({
@@ -6257,10 +6258,14 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
                           <td className="p-0.5 border-x border-slate-800">
                             <input
                               type="text"
-                              value={editKardexForm.dispatched !== undefined && editKardexForm.dispatched !== null && String(editKardexForm.dispatched) !== '0' && String(editKardexForm.dispatched) !== '۰' ? String(editKardexForm.dispatched) : ''}
+                              value={editKardexForm.dispatched ?? ''}
                               onChange={e => {
-                                updateEditFormField('dispatched', e.target.value);
-                                updateEditFormField('waybill_number', e.target.value);
+                                const val = e.target.value;
+                                setEditKardexForm(prev => ({
+                                  ...prev,
+                                  dispatched: val,
+                                  waybill_number: val
+                                }));
                               }}
                               placeholder="شماره بارنامه/ارسالی"
                               className="w-full text-center text-[10px] bg-slate-900 border border-blue-700/60 rounded px-0.5 py-0.5 h-7 leading-none text-blue-100 placeholder-slate-600 placeholder:text-[9px] focus:outline-hidden focus:border-blue-400 truncate"

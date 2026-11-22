@@ -54,6 +54,13 @@ interface GoodsExitReceiptModalProps {
   products?: Product[];
 }
 
+const cleanDispatchedText = (val: any): string => {
+  if (val === undefined || val === null) return '';
+  const trimmed = String(val).trim();
+  if (!trimmed || trimmed === '0' || trimmed === '۰' || trimmed === '-') return '';
+  return trimmed;
+};
+
 export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
   isOpen,
   onClose,
@@ -319,7 +326,8 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
     }
 
     const effectiveId = productionEntry?.entry_id || entry?.entry_id;
-    const initialDispatched = (productionEntry?.dispatch_out || productionEntry?.order_quantity || (entry?.dispatched !== undefined && Number(entry.dispatched) > 0 ? entry.dispatched : '')) || '';
+    const entryDispatchedText = cleanDispatchedText(entry?.dispatched) || cleanDispatchedText(entry?.waybill_number);
+    const initialDispatched = cleanDispatchedText(productionEntry?.dispatch_out || productionEntry?.order_quantity) || entryDispatchedText;
     const initialScrapBalance = (entry?.scrap_balance !== undefined && Number(entry.scrap_balance) > 0) ? entry.scrap_balance : '';
 
     if (effectiveId) {
@@ -332,10 +340,10 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
           vehicleType: savedInDb.vehicle_type || 'خاور مسقف',
           plateNumber: savedInDb.plate_number || productionEntry?.plate_number || 'ایران 22 - 345 ع 78',
           driverName: savedInDb.driver_name || productionEntry?.driver_name || customer?.manager_name || 'راننده توزیع / حمل',
-          waybillNumber: savedInDb.waybill_number || productionEntry?.waybill_number || '98432',
+          waybillNumber: cleanDispatchedText(savedInDb.waybill_number) || cleanDispatchedText(productionEntry?.waybill_number) || cleanDispatchedText(entry?.waybill_number) || entryDispatchedText || '',
           driverCardOrSheba: savedInDb.driver_card_or_sheba || '',
           driverNationalId: savedInDb.driver_national_id || '',
-          dispatchedQuantity: savedInDb.dispatched !== undefined ? (Number(savedInDb.dispatched) > 0 ? savedInDb.dispatched : '') : initialDispatched,
+          dispatchedQuantity: cleanDispatchedText(savedInDb.dispatched) || cleanDispatchedText(savedInDb.waybill_number) || initialDispatched,
           scrapBalance: savedInDb.scrap_balance !== undefined ? (Number(savedInDb.scrap_balance) > 0 ? savedInDb.scrap_balance : '') : initialScrapBalance,
           items: savedInDb.items && savedInDb.items.length > 0 ? savedInDb.items : buildInitialItems(),
           warehouseSigner: savedInDb.signer_1 || 'مسئول انبار و تحویل',
@@ -391,7 +399,7 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
       vehicleType: 'خاور مسقف',
       plateNumber: 'ایران 22 - 345 ع 78',
       driverName: customer?.manager_name || 'راننده توزیع / حمل',
-      waybillNumber: '98432',
+      waybillNumber: cleanDispatchedText(entry?.waybill_number) || entryDispatchedText || '',
       dispatchedQuantity: initialDispatched,
       scrapBalance: initialScrapBalance,
       items: buildInitialItems(),
@@ -458,7 +466,8 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
     }
 
     const effectiveId = productionEntry?.entry_id || entry?.entry_id;
-    const initialDispatched = (productionEntry?.dispatch_out || productionEntry?.order_quantity || (entry?.dispatched !== undefined && Number(entry.dispatched) > 0 ? entry.dispatched : '')) || '';
+    const entryDispatchedText = cleanDispatchedText(entry?.dispatched) || cleanDispatchedText(entry?.waybill_number);
+    const initialDispatched = cleanDispatchedText(productionEntry?.dispatch_out || productionEntry?.order_quantity) || entryDispatchedText;
     const initialScrapBalance = (entry?.scrap_balance !== undefined && Number(entry.scrap_balance) > 0) ? entry.scrap_balance : '';
 
     if (effectiveId) {
@@ -472,10 +481,10 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
           vehicleType: savedInDb.vehicle_type || 'خاور مسقف',
           plateNumber: savedInDb.plate_number || productionEntry?.plate_number || 'ایران 22 - 345 ع 78',
           driverName: savedInDb.driver_name || productionEntry?.driver_name || customer?.manager_name || 'راننده توزیع / حمل',
-          waybillNumber: savedInDb.waybill_number || productionEntry?.waybill_number || '98432',
+          waybillNumber: cleanDispatchedText(savedInDb.waybill_number) || cleanDispatchedText(productionEntry?.waybill_number) || cleanDispatchedText(entry?.waybill_number) || entryDispatchedText || '',
           driverCardOrSheba: savedInDb.driver_card_or_sheba || '',
           driverNationalId: savedInDb.driver_national_id || '',
-          dispatchedQuantity: savedInDb.dispatched !== undefined ? (Number(savedInDb.dispatched) > 0 ? savedInDb.dispatched : '') : initialDispatched,
+          dispatchedQuantity: cleanDispatchedText(savedInDb.dispatched) || cleanDispatchedText(savedInDb.waybill_number) || initialDispatched,
           scrapBalance: savedInDb.scrap_balance !== undefined ? (Number(savedInDb.scrap_balance) > 0 ? savedInDb.scrap_balance : '') : initialScrapBalance,
           items: savedInDb.items && savedInDb.items.length > 0 ? savedInDb.items : buildInitialItems(),
           warehouseSigner: savedInDb.signer_1 || 'مسئول انبار و تحویل',
@@ -534,7 +543,7 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
       vehicleType: 'خاور مسقف',
       plateNumber: 'ایران 22 - 345 ع 78',
       driverName: customer?.manager_name || 'راننده توزیع / حمل',
-      waybillNumber: '98432',
+      waybillNumber: cleanDispatchedText(entry?.waybill_number) || entryDispatchedText || '',
       driverCardOrSheba: '',
       driverNationalId: '',
       dispatchedQuantity: initialDispatched,
@@ -573,9 +582,10 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
 
     setSaveStatus('saving');
     try {
-      const dispVal = formData.dispatchedQuantity !== undefined && formData.dispatchedQuantity !== null && String(formData.dispatchedQuantity).trim() !== '' && String(formData.dispatchedQuantity).trim() !== '0' && String(formData.dispatchedQuantity).trim() !== '۰'
-        ? String(formData.dispatchedQuantity).trim()
-        : '';
+      const dispVal = cleanDispatchedText(formData.dispatchedQuantity);
+      const wbVal = cleanDispatchedText(formData.waybillNumber);
+      const finalWaybill = wbVal || cleanDispatchedText(entry?.waybill_number) || dispVal || cleanDispatchedText(entry?.dispatched);
+      const finalDisp = dispVal || wbVal || cleanDispatchedText(entry?.dispatched) || finalWaybill;
       const record = LocalStorageManager.saveGoodsReceipt(
         currentEnv || 'OFFICE_WIN11',
         {
@@ -591,10 +601,10 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
           vehicle_type: formData.vehicleType,
           plate_number: formData.plateNumber,
           driver_name: formData.driverName,
-          waybill_number: formData.waybillNumber,
+          waybill_number: finalWaybill,
           driver_card_or_sheba: formData.driverCardOrSheba,
           driver_national_id: formData.driverNationalId,
-          dispatched: dispVal,
+          dispatched: finalDisp,
           items: formData.items,
           signer_1: formData.warehouseSigner,
           signer_2: formData.receiverSigner,
@@ -607,17 +617,21 @@ export const GoodsExitReceiptModal: React.FC<GoodsExitReceiptModalProps> = ({
       );
 
       if (entry?.entry_id) {
-        const finalDisp = dispVal || formData.waybillNumber || '';
-        LocalStorageManager.updateKardexEntry(
-          currentEnv || 'OFFICE_WIN11',
-          entry.entry_id,
-          { dispatched: finalDisp, waybill_number: formData.waybillNumber || '' },
-          currentUser || null
-        );
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('mgas:kardex_updated', {
-            detail: { ...entry, dispatched: finalDisp, waybill_number: formData.waybillNumber || '' }
-          }));
+        const kardexUpdatePatch: Partial<GasKardexEntry> = {};
+        if (finalDisp) kardexUpdatePatch.dispatched = finalDisp;
+        if (finalWaybill) kardexUpdatePatch.waybill_number = finalWaybill;
+        if (Object.keys(kardexUpdatePatch).length > 0) {
+          LocalStorageManager.updateKardexEntry(
+            currentEnv || 'OFFICE_WIN11',
+            entry.entry_id,
+            kardexUpdatePatch,
+            currentUser || null
+          );
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('mgas:kardex_updated', {
+              detail: { ...entry, ...kardexUpdatePatch }
+            }));
+          }
         }
       }
 

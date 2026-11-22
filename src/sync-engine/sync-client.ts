@@ -45,6 +45,44 @@ export interface LiveLogEntry {
   details?: any;
 }
 
+export interface IntranetPeer {
+  node_id: string;
+  hostname: string;
+  ip: string;
+  port: number;
+  role: 'HUB' | 'CLIENT' | 'AUTO' | string;
+  sequence: number;
+  has_cloud: boolean;
+  last_seen_ms_ago: number;
+}
+
+export interface IntranetStatus {
+  success: boolean;
+  is_desktop_server: boolean;
+  version?: string;
+  role?: 'HUB' | 'CLIENT' | 'AUTO' | string;
+  effective_role?: 'HUB' | 'CLIENT' | string;
+  hostname?: string;
+  node_id?: string;
+  tcp_port?: number;
+  udp_port?: number;
+  local_ips?: string[];
+  primary_url?: string;
+  manual_hub_ip?: string;
+  manual_hub_port?: number;
+  discovered_hub_url?: string;
+  discovered_hub_hostname?: string;
+  active_hub_url?: string;
+  cloud_online?: boolean;
+  last_cloud_check?: string;
+  ledger_events_count?: number;
+  unsynced_to_cloud_count?: number;
+  server_sequence?: number;
+  sse_clients_count?: number;
+  last_purged_at?: string;
+  peers?: IntranetPeer[];
+}
+
 export interface SyncReport {
   timestamp: string;
   environment: RuntimeEnvironment;
@@ -110,7 +148,79 @@ export class SyncEngine {
     this.logListeners.forEach(l => l([]));
   }
 
-  // Real-time Cloud Connection Diagnostic
+  static async getIntranetStatus(): Promise<IntranetStatus | null> {
+    try {
+      const url = getApiUrl('/api/intranet/status');
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(2500),
+        headers: { Accept: 'application/json' }
+      });
+      if (!res.ok) return null;
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) return null;
+      const data = await res.json();
+      if (!data || !data.is_desktop_server) return null;
+      return data as IntranetStatus;
+    } catch {
+      return null;
+    }
+  }
+
+  static async updateIntranetConfig(cfg: {
+    role?: 'HUB' | 'CLIENT' | 'AUTO';
+    manual_hub_ip?: string;
+    manual_hub_port?: number;
+  }): Promise<IntranetStatus | null> {
+    try {
+      const url = getApiUrl('/api/intranet/config');
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(cfg),
+        signal: AbortSignal.timeout(3500)
+      });
+      if (!res.ok) return null;
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) return null;
+      const data = await res.json();
+      if (data?.is_desktop_server) {
+        this.addLog(
+          'success',
+          `تنظیمات اینترانت شبکه داخلی به‌روزرسانی شد (نقش: ${data.role} -> ${data.effective_role}).`,
+          'INTRANET_CFG'
+        );
+      }
+      return data as IntranetStatus;
+    } catch {
+      return null;
+    }
+  }
+
+  static async pingIntranetPeer(ip: string, port = 3000): Promise<{
+    success: boolean;
+    reachable: boolean;
+    ip?: string;
+    port?: number;
+    latency_ms?: number;
+    http_status?: number;
+    error?: string;
+  } | null> {
+    try {
+      const url = getApiUrl('/api/intranet/ping-peer');
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ ip, port }),
+        signal: AbortSignal.timeout(3500)
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  // Real-time Cloud & Intranet Connection Diagnostic
   static async checkCloudStatus(): Promise<{
     connected: boolean;
     status: string;
@@ -118,14 +228,17 @@ export class SyncEngine {
     latencyMs?: number;
     error?: string;
     totalCloudEvents?: number;
+    lanOnline?: boolean;
   }> {
     const startTime = Date.now();
+    let lanOnline = false;
     // 1. Try local status endpoint
     try {
       const localUrl = getApiUrl('/api/sync/status');
       const res = await fetch(localUrl, { signal: AbortSignal.timeout(5000) });
       if (res.ok) {
         const data = await res.json();
+        lanOnline = data.lan_status === 'ONLINE';
         if (data.status === 'CONNECTED') {
           this.addLog(
             'success',
@@ -138,7 +251,8 @@ export class SyncEngine {
             url: data.cloud_url || CLOUDFLARE_WORKER_URL,
             latencyMs: data.latency_ms || 45,
             error: undefined,
-            totalCloudEvents: data.remote_events_count || 20
+            totalCloudEvents: data.remote_events_count || 20,
+            lanOnline
           };
         }
       }
@@ -161,23 +275,32 @@ export class SyncEngine {
           status: 'CONNECTED',
           url: CLOUDFLARE_WORKER_URL,
           latencyMs: latency,
-          totalCloudEvents: directData?.events?.length || 20
+          totalCloudEvents: directData?.events?.length || 20,
+          lanOnline
         };
       }
     } catch (directErr: any) {
-      this.addLog('error', `خطا در برقراری اتصال به anbar.mgas.ir: ${directErr?.message || 'عدم دسترسی'}`, 'CLOUD_CHECK');
+      this.addLog(
+        lanOnline ? 'warn' : 'error',
+        lanOnline
+          ? 'اینترنت قطع است — ارتباط شبکه داخلی اینترانت (LAN) فعال می‌باشد.'
+          : `خطا در برقراری اتصال به anbar.mgas.ir: ${directErr?.message || 'عدم دسترسی'}`,
+        'CLOUD_CHECK'
+      );
       return {
         connected: false,
         status: 'OFFLINE',
         url: CLOUDFLARE_WORKER_URL,
-        error: directErr?.message || 'خطا در ارتباط با سرور ابری'
+        error: directErr?.message || 'خطا در ارتباط با سرور ابری',
+        lanOnline
       };
     }
 
     return {
       connected: false,
       status: 'OFFLINE',
-      url: CLOUDFLARE_WORKER_URL
+      url: CLOUDFLARE_WORKER_URL,
+      lanOnline
     };
   }
 
@@ -397,7 +520,7 @@ export class SyncEngine {
         serverSeq = paged.serverSequence || 1020;
       }
     } catch (err: any) {
-      this.addLog('warn', `خطا در دریافت مستقیم از anbar.mgas.ir (${err?.message})، تلاش از سرور محلی...`, 'FORCE_SYNC');
+      this.addLog('warn', `عدم دسترسی مستقیم به anbar.mgas.ir (${err?.message})، دریافت از شبکه داخلی اینترانت...`, 'FORCE_SYNC');
       try {
         const localBase = getApiUrl('').replace(/\/$/, '');
         const pagedLocal = await this.fetchAllSyncPages(localBase, 0, localState.deviceId, 5000);
@@ -416,7 +539,7 @@ export class SyncEngine {
 
     if (eventsList.length > 0) {
       const applied = this.applyIncomingEventsToAllEnvs(env, eventsList, serverSeq);
-      this.addLog('success', `بروزرسانی دیتابیس‌ها با سرور مرکزی anbar.mgas.ir با موفقیت انجام شد (${applied} رویداد جدید اعمال شد).`, 'FORCE_SYNC');
+      this.addLog('success', `بروزرسانی دیتابیس‌ها با موفقیت انجام شد (${applied} رویداد جدید اعمال شد).`, 'FORCE_SYNC');
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('mgas:database_refreshed'));
         window.dispatchEvent(new CustomEvent('mgas:kardex_updated'));
@@ -452,6 +575,8 @@ export class SyncEngine {
   private static defaultActiveEnv: RuntimeEnvironment = 'OFFICE_WIN11';
   private static hasCompletedInitialFullPull = false;
   private static hasPendingImmediateSync: Partial<Record<RuntimeEnvironment, boolean>> = {};
+  private static instantPushPromises: Partial<Record<RuntimeEnvironment, Promise<boolean>>> = {};
+  private static lastDirectCloudSequence = 0;
   public static readonly SYNC_INTERVAL_SECONDS = 20;
   private static countdownSeconds: number = 20;
   private static countdownTimer: any = null;
@@ -567,6 +692,33 @@ export class SyncEngine {
       return true;
     }
 
+    // Coordinate with any active full sync cycle to avoid duplicate or racing status flips
+    if (this.isSyncing[env]) {
+      this.hasPendingImmediateSync[env] = true;
+      return true;
+    }
+
+    if (this.instantPushPromises[env]) {
+      try {
+        await this.instantPushPromises[env];
+      } catch {}
+    }
+
+    const runPromise = this._executeInstantPush(env, event);
+    this.instantPushPromises[env] = runPromise;
+    try {
+      return await runPromise;
+    } finally {
+      if (this.instantPushPromises[env] === runPromise) {
+        delete this.instantPushPromises[env];
+      }
+    }
+  }
+
+  private static async _executeInstantPush(env: RuntimeEnvironment, event?: SyncEvent): Promise<boolean> {
+    const state = LocalStorageManager.getState(env);
+    if (state.isOfflineSimulated) return true;
+
     // Collect pending events from queue or event argument
     let eventsToPush = state.sync_queue
       .filter(q => q.status === 'PENDING' || q.status === 'UPLOADING')
@@ -609,6 +761,7 @@ export class SyncEngine {
     const localUrl = getApiUrl('/api/sync/events');
 
     let isSuccess = false;
+    let usedLanFallback = false;
     const acceptedIds = new Set<string>();
 
     // Direct Parallel Push to Cloudflare Worker & Local Server
@@ -650,24 +803,51 @@ export class SyncEngine {
 
     try {
       const results = await Promise.allSettled(pushTasks);
+      let anyCloudAccepted = false;
       results.forEach(res => {
         if (res.status === 'fulfilled' && res.value && res.value.ok) {
           isSuccess = true;
+          if (res.value.data?.source === 'INTRANET_LAN') {
+            usedLanFallback = true;
+          } else if (res.value.target === 'CLOUDFLARE' || res.value.data?.cloud_synced !== false) {
+            anyCloudAccepted = true;
+          }
           const accepted = res.value.data?.accepted_events || [];
           if (Array.isArray(accepted)) {
             accepted.forEach((a: any) => acceptedIds.add(a.event_id));
           }
         }
       });
+      if (anyCloudAccepted) usedLanFallback = false;
+
+      if (!isSuccess && acceptedIds.size === 0) {
+        const offlineState = LocalStorageManager.getState(env);
+        offlineState.sync_queue.forEach(qItem => {
+          if (eventsToPush.some(e => e.event_id === qItem.event_id) && qItem.status === 'UPLOADING') {
+            qItem.status = 'PENDING';
+            qItem.last_attempt_at = new Date().toISOString();
+          }
+        });
+        offlineState.sync_state.status = 'OFFLINE';
+        offlineState.sync_state.pending_events_count = offlineState.sync_queue.filter(q => q.status === 'PENDING').length;
+        LocalStorageManager.saveState(env, offlineState);
+        this.addLog('warn', 'سرور ابری و داخلی موقتاً در دسترس نیستند؛ رویدادها در صف محلی محفوظ ماندند و در اولین اتصال ارسال می‌شوند.', 'INSTANT_QUEUE');
+        return false;
+      }
+
+      const fullyConfirmed = anyCloudAccepted || usedLanFallback;
 
       // Update state sync queue
       const latestState = LocalStorageManager.getState(env);
       latestState.sync_queue.forEach(qItem => {
         if (eventsToPush.some(e => e.event_id === qItem.event_id)) {
-          if (isSuccess || acceptedIds.has(qItem.event_id)) {
+          if (fullyConfirmed && (isSuccess || acceptedIds.has(qItem.event_id))) {
             qItem.status = 'CONFIRMED';
             qItem.last_attempt_at = new Date().toISOString();
             qItem.error_message = undefined;
+          } else if (qItem.status === 'UPLOADING') {
+            qItem.status = 'PENDING';
+            qItem.last_attempt_at = new Date().toISOString();
           }
         }
       });
@@ -684,7 +864,7 @@ export class SyncEngine {
           try {
             const oState = LocalStorageManager.getState(otherEnv);
             oState.sync_queue.forEach(qItem => {
-              if (eventsToPush.some(e => e.event_id === qItem.event_id)) {
+              if (fullyConfirmed && eventsToPush.some(e => e.event_id === qItem.event_id)) {
                 qItem.status = 'CONFIRMED';
               }
             });
@@ -695,11 +875,25 @@ export class SyncEngine {
         }
       }
 
-      this.addLog(
-        'success',
-        `✅ سند و آیتم‌ها بلافاصله (بدون تاخیر قانون ۲۰ ثانیه) در پل کاربر و پایگاه ابری کلودفلر (anbar.mgas.ir) به‌روزرسانی شدند.`,
-        'INSTANT_SUCCESS'
-      );
+      if (usedLanFallback) {
+        this.addLog(
+          'success',
+          'ثبت و همگام‌سازی فوری در شبکه داخلی اینترانت (بدون اینترنت) انجام شد؛ ارسال به ابر در اولین اتصال اینترنت انجام می‌گردد.',
+          'INSTANT_LAN'
+        );
+      } else if (!anyCloudAccepted) {
+        this.addLog(
+          'warn',
+          'سند در سرور محلی ثبت شد؛ همگام‌سازی با پایگاه ابری کلودفلر (anbar.mgas.ir) در صف ارسال مجدد قرار گرفت.',
+          'INSTANT_LOCAL_ONLY'
+        );
+      } else {
+        this.addLog(
+          'success',
+          '✅ سند و آیتم‌ها بلافاصله (بدون تاخیر قانون ۲۰ ثانیه) در پل کاربر و پایگاه ابری کلودفلر (anbar.mgas.ir) به‌روزرسانی شدند.',
+          'INSTANT_SUCCESS'
+        );
+      }
 
       // Final reactive notification
       if (typeof window !== 'undefined') {
@@ -943,11 +1137,12 @@ export class SyncEngine {
     if (!this.onlineListenerAttached) {
       this.onlineListenerAttached = true;
       window.addEventListener('online', () => {
+        if (LocalStorageManager.getState(env).isOfflineSimulated) return;
         this.addLog('success', '⚡ اتصال به اینترنت مجدداً برقرار شد. آغاز ارسال اسناد صف آفلاین و دریافت آخرین اسناد از کلودفلر...', 'ONLINE_RECONNECT');
         this.syncNow(env).catch(() => {});
       });
       window.addEventListener('offline', () => {
-        this.addLog('warn', '⚠️ اتصال اینترنت قطع شد. برنامه در حالت آفلاین فعال است و اسناد در دیتابیس محلی ذخیره می‌شوند.', 'OFFLINE_DETECT');
+        this.addLog('warn', '⚠️ اتصال اینترنت قطع شد. برنامه در حالت آفلاین / اینترانت فعال است و اسناد در دیتابیس محلی ذخیره می‌شوند.', 'OFFLINE_DETECT');
       });
     }
 
@@ -994,10 +1189,18 @@ export class SyncEngine {
       source.onmessage = (event) => {
         try {
           if (!event.data) return;
+          // Preserve exact web-parity offline simulation: ignore live incoming broadcasts while offline simulation is toggled ON
+          if (LocalStorageManager.getState(env).isOfflineSimulated) return;
           const data = JSON.parse(event.data);
 
           if (data.type === 'CONNECTED') {
-            this.addLog('success', `اتصال امن به کلودفلر برقرار شد. شناسه توالی سرور: ${data.current_server_sequence || 1000}`, 'SSE_CONNECT');
+            this.addLog(
+              'success',
+              data.intranet_lan
+                ? `اتصال بلادرنگ استریم اینترانت/ابری برقرار شد. توالی: ${data.current_server_sequence || 1000}`
+                : `اتصال امن به کلودفلر برقرار شد. شناسه توالی سرور: ${data.current_server_sequence || 1000}`,
+              'SSE_CONNECT'
+            );
             if (data.last_purged_at) {
               this.maybeApplyRemotePurgeMarker(env, data.last_purged_at, data.purge_preserve_products !== false, data.current_server_sequence);
             }
@@ -1142,6 +1345,16 @@ export class SyncEngine {
       };
     }
 
+    // Wait briefly if an instant push is currently in-flight for this env so status flips never race
+    if (this.instantPushPromises[env]) {
+      try {
+        await Promise.race([
+          this.instantPushPromises[env],
+          new Promise(resolve => setTimeout(resolve, 4000))
+        ]);
+      } catch {}
+    }
+
     const state = LocalStorageManager.getState(env);
 
     // 1. If device is in simulated offline mode, do not connect to Central API
@@ -1197,47 +1410,43 @@ export class SyncEngine {
         let uploadRes: Response | null = null;
         let uploadErrorMsg: string = '';
         const centralUrl = getCentralServerUrl();
+        const uploadPayloadStr = JSON.stringify({
+          events: eventsToUpload,
+          device_id: state.deviceId
+        });
 
-        // Priority 1: Send directly to Central Server (Cloudflare D1 https://anbar.mgas.ir)
-        try {
-          uploadRes = await fetch(`${centralUrl}/api/sync/events`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              events: eventsToUpload,
-              device_id: state.deviceId
-            }),
-            signal: AbortSignal.timeout(2500)
-          });
-        } catch (netErr: any) {
-          uploadErrorMsg = netErr?.message || 'خطا در ارتباط با سرور';
-        }
+        // Priority 1: Send to primary origin (/api/sync/events or CLOUDFLARE_WORKER_URL) AND directly to Cloudflare D1 in parallel
+        const directCloudPromise = fetch(`${CLOUDFLARE_WORKER_URL}/api/sync/events`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: uploadPayloadStr,
+          signal: AbortSignal.timeout(4000)
+        }).catch(() => null);
 
-        // Also notify local server SSE relay if running on remote web container
-        try {
-          const localUrl = getApiUrl('/api/sync/events');
-          if (localUrl !== `${centralUrl}/api/sync/events`) {
-            const localRes = await fetch(localUrl, {
+        const localEndpointUrl = centralUrl ? `${centralUrl}/api/sync/events` : getApiUrl('/api/sync/events');
+        if (localEndpointUrl !== `${CLOUDFLARE_WORKER_URL}/api/sync/events`) {
+          try {
+            uploadRes = await fetch(localEndpointUrl, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                events: eventsToUpload,
-                device_id: state.deviceId
-              }),
+              headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+              body: uploadPayloadStr,
               signal: AbortSignal.timeout(5000)
             });
-            // Only use localRes as fallback if centralUrl failed AND localRes confirmed central relay
-            if ((!uploadRes || !uploadRes.ok) && localRes.ok) {
-              const ct = localRes.headers.get('content-type') || '';
-              if (ct.includes('application/json')) {
-                const checkData = await localRes.clone().json();
-                if (checkData && checkData.success && Array.isArray(checkData.accepted_events) && checkData.accepted_events.length > 0) {
-                  uploadRes = localRes;
-                }
-              }
-            }
+          } catch (netErr: any) {
+            uploadErrorMsg = netErr?.message || 'خطا در ارتباط با سرور';
           }
-        } catch {}
+          const cloudDirectRes = await directCloudPromise;
+          if ((!uploadRes || !uploadRes.ok) && cloudDirectRes && cloudDirectRes.ok) {
+            uploadRes = cloudDirectRes;
+          }
+        } else {
+          const cloudDirectRes = await directCloudPromise;
+          if (cloudDirectRes) {
+            uploadRes = cloudDirectRes;
+          } else {
+            uploadErrorMsg = 'خطا در ارتباط با سرور مرکزی';
+          }
+        }
 
         if (uploadRes && uploadRes.ok) {
           const uploadContentType = uploadRes.headers.get('content-type') || '';
@@ -1268,7 +1477,15 @@ export class SyncEngine {
               });
 
               uploadedCount = acceptedIds.size;
-              this.addLog('success', `${uploadedCount} رویداد در دیتابیس مرکزی با موفقیت ثبت و تأیید شد.`, 'D1_CONFIRM');
+              if (uploadResult.source === 'INTRANET_LAN') {
+                this.addLog(
+                  'success',
+                  `ثبت و همگام‌سازی فوری ${uploadedCount} رویداد در شبکه داخلی اینترانت (بدون اینترنت) انجام شد؛ ارسال به ابر در اولین اتصال اینترنت انجام می‌گردد.`,
+                  'LAN_CONFIRM'
+                );
+              } else {
+                this.addLog('success', `${uploadedCount} رویداد در دیتابیس مرکزی با موفقیت ثبت و تأیید شد.`, 'D1_CONFIRM');
+              }
             } else {
               pendingItems.forEach(item => {
                 item.status = 'PENDING';
@@ -1290,15 +1507,15 @@ export class SyncEngine {
         LocalStorageManager.saveState(env, LocalStorageManager.getState(env));
       }
 
-      // STEP B: DOWNLOAD MISSING SERVER EVENTS (with full pagination support)
+      // STEP B: DOWNLOAD MISSING SERVER EVENTS (from both local server and Cloudflare D1 directly)
       const currentAfterUpload = LocalStorageManager.getState(env);
       const sinceSeq = (!this.hasCompletedInitialFullPull || currentAfterUpload.sync_events.length === 0)
         ? 0
         : Math.max(0, (currentAfterUpload.sync_state.last_server_sequence || 0) - 20);
       const centralUrl = getCentralServerUrl();
 
-      // Priority 1: Pull directly from Central Server (or same-origin API)
-      let pagedPull = await this.fetchAllSyncPages(centralUrl, sinceSeq, state.deviceId, 4000).catch(() => ({
+      const localBase = getApiUrl('').replace(/\/$/, '');
+      const localPullPromise = this.fetchAllSyncPages(centralUrl || localBase, sinceSeq, state.deviceId, 4500).catch(() => ({
         ok: false,
         events: [] as SyncEvent[],
         serverSequence: sinceSeq,
@@ -1306,11 +1523,34 @@ export class SyncEngine {
         preserveProducts: true
       }));
 
-      // Priority 2: Fallback to local server proxy if central was unreachable
-      if (!pagedPull.ok) {
-        const localBase = getApiUrl('').replace(/\/$/, '');
-        if (localBase !== centralUrl.replace(/\/$/, '')) {
-          pagedPull = await this.fetchAllSyncPages(localBase, sinceSeq, state.deviceId, 4000).catch(() => pagedPull);
+      // Always also query Cloudflare D1 directly when running against a local web/preview host so remote edits never wait
+      const shouldDirectCloudPull = (centralUrl || localBase) !== CLOUDFLARE_WORKER_URL;
+      const directCloudSinceSeq = (!this.hasCompletedInitialFullPull || currentAfterUpload.sync_events.length === 0)
+        ? 0
+        : Math.max(0, this.lastDirectCloudSequence - 20);
+      const directCloudPullPromise = shouldDirectCloudPull
+        ? this.fetchAllSyncPages(CLOUDFLARE_WORKER_URL, directCloudSinceSeq, state.deviceId, 3500).catch(() => ({
+            ok: false,
+            events: [] as SyncEvent[],
+            serverSequence: directCloudSinceSeq,
+            lastPurgedAt: null as string | null,
+            preserveProducts: true
+          }))
+        : Promise.resolve(null);
+
+      const [pagedPull, cloudPull] = await Promise.all([localPullPromise, directCloudPullPromise]);
+
+      if (cloudPull && cloudPull.ok) {
+        if (cloudPull.serverSequence > this.lastDirectCloudSequence) {
+          this.lastDirectCloudSequence = cloudPull.serverSequence;
+        }
+        if (cloudPull.lastPurgedAt) {
+          this.maybeApplyRemotePurgeMarker(
+            env,
+            cloudPull.lastPurgedAt,
+            cloudPull.preserveProducts,
+            cloudPull.serverSequence
+          );
         }
       }
 
@@ -1323,8 +1563,23 @@ export class SyncEngine {
             pagedPull.serverSequence
           );
         }
+      }
+
+      if (pagedPull.ok || (cloudPull && cloudPull.ok)) {
         this.hasCompletedInitialFullPull = true;
-        downloadedCount = this.applyIncomingEventsToAllEnvs(env, pagedPull.events, pagedPull.serverSequence);
+        const mergedEvents: SyncEvent[] = [];
+        const mergedIds = new Set<string>();
+        for (const ev of [...(pagedPull.events || []), ...((cloudPull && cloudPull.events) || [])]) {
+          if (ev?.event_id && !mergedIds.has(ev.event_id)) {
+            mergedIds.add(ev.event_id);
+            mergedEvents.push(ev);
+          }
+        }
+        const effectiveSeq = Math.max(
+          pagedPull.ok ? pagedPull.serverSequence : 0,
+          currentAfterUpload.sync_state.last_server_sequence || 0
+        );
+        downloadedCount = this.applyIncomingEventsToAllEnvs(env, mergedEvents, effectiveSeq);
 
         if (downloadedCount > 0) {
           this.addLog('success', `${downloadedCount} سند/رویداد جدید از سرور مرکزی دریافت و در سیستم اعمال شد.`, 'D1_PULL');

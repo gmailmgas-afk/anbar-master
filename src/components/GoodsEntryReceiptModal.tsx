@@ -52,6 +52,13 @@ interface GoodsEntryReceiptModalProps {
   products?: Product[];
 }
 
+const cleanDispatchedText = (val: any): string => {
+  if (val === undefined || val === null) return '';
+  const trimmed = String(val).trim();
+  if (!trimmed || trimmed === '0' || trimmed === '۰' || trimmed === '-') return '';
+  return trimmed;
+};
+
 export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
   isOpen,
   onClose,
@@ -89,6 +96,8 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
         remarks: ''
       });
     } else if (entry) {
+      const kardexDesc = (entry.description || '').trim();
+
       // 1. Incoming cylinder
       if (entry.cylinder_in > 0) {
         items.push({
@@ -175,6 +184,25 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
           remarks: ''
         });
       }
+
+      // Match row 1 description (شرح) exactly to Kardex description
+      if (kardexDesc) {
+        if (items.length > 0) {
+          items[0].description = kardexDesc;
+        } else {
+          const fallbackQty = Number(entry.scrap_stock_in || 0) > 0
+            ? Number(entry.scrap_stock_in)
+            : '';
+          items.push({
+            rowNum: rowCount++,
+            description: kardexDesc,
+            quantity: fallbackQty,
+            quantityInWords: typeof fallbackQty === 'number' && fallbackQty > 0 ? numberToPersianWords(fallbackQty) : '',
+            freightCost: '',
+            remarks: ''
+          });
+        }
+      }
     }
 
     // Ensure 3 rows default so it fits cleanly in 1 A5 page
@@ -238,7 +266,7 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
       };
     }
 
-    const initialDispatched = (entry?.dispatched !== undefined && Number(entry.dispatched) > 0) ? entry.dispatched : '';
+    const initialDispatched = cleanDispatchedText(entry?.dispatched) || cleanDispatchedText(entry?.waybill_number);
     const initialScrapBalance = (entry?.scrap_balance !== undefined && Number(entry.scrap_balance) > 0) ? entry.scrap_balance : '';
     if (entry?.entry_id) {
       const savedInDb = LocalStorageManager.getGoodsReceiptByEntryId(currentEnv, entry.entry_id, 'ENTRY');
@@ -252,7 +280,7 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
           receiverName: savedInDb.signer_1 || 'مسئول دریافت و تعمیرات انبار',
           driverCardOrSheba: savedInDb.driver_card_or_sheba || '',
           driverNationalId: savedInDb.driver_national_id || '',
-          dispatchedQuantity: savedInDb.dispatched !== undefined ? (Number(savedInDb.dispatched) > 0 ? savedInDb.dispatched : '') : initialDispatched,
+          dispatchedQuantity: cleanDispatchedText(savedInDb.dispatched) || cleanDispatchedText(savedInDb.waybill_number) || initialDispatched,
           scrapBalance: savedInDb.scrap_balance !== undefined ? (Number(savedInDb.scrap_balance) > 0 ? savedInDb.scrap_balance : '') : initialScrapBalance,
           items: savedInDb.items && savedInDb.items.length > 0 ? (savedInDb.items as any) : buildInitialItems(),
           warehouseSigner: savedInDb.signer_3 || 'مسئول انبار',
@@ -342,7 +370,7 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
       return;
     }
 
-    const initialDispatched = (entry?.dispatched !== undefined && Number(entry.dispatched) > 0) ? entry.dispatched : '';
+    const initialDispatched = cleanDispatchedText(entry?.dispatched) || cleanDispatchedText(entry?.waybill_number);
     const initialScrapBalance = (entry?.scrap_balance !== undefined && Number(entry.scrap_balance) > 0) ? entry.scrap_balance : '';
 
     if (entry?.entry_id) {
@@ -358,7 +386,7 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
           receiverName: savedInDb.signer_1 || 'مسئول دریافت و تعمیرات انبار',
           driverCardOrSheba: savedInDb.driver_card_or_sheba || '',
           driverNationalId: savedInDb.driver_national_id || '',
-          dispatchedQuantity: savedInDb.dispatched !== undefined ? (Number(savedInDb.dispatched) > 0 ? savedInDb.dispatched : '') : initialDispatched,
+          dispatchedQuantity: cleanDispatchedText(savedInDb.dispatched) || cleanDispatchedText(savedInDb.waybill_number) || initialDispatched,
           scrapBalance: savedInDb.scrap_balance !== undefined ? (Number(savedInDb.scrap_balance) > 0 ? savedInDb.scrap_balance : '') : initialScrapBalance,
           items: savedInDb.items && savedInDb.items.length > 0 ? (savedInDb.items as any) : buildInitialItems(),
           warehouseSigner: savedInDb.signer_3 || 'مسئول انبار',
@@ -398,7 +426,7 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
       adminSigner: 'امور اداری و مالی',
       delivererSigner: 'سرپرست'
     });
-  }, [entry?.entry_id, entry?.dispatched, entry?.scrap_balance, movement?.movement_id, movement?.quantity, isOpen, currentEnv, customer?.name]);
+  }, [entry?.entry_id, entry?.description, entry?.dispatched, entry?.scrap_balance, movement?.movement_id, movement?.quantity, isOpen, currentEnv, customer?.name]);
 
   const handleGenerateNextSerial = () => {
     const nextSerial = allocateNextUniqueReceiptNumber(currentEnv, 'ENTRY');
@@ -426,9 +454,14 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
 
     setSaveStatus('saving');
     try {
-      const dispVal = formData.dispatchedQuantity !== undefined && formData.dispatchedQuantity !== null && String(formData.dispatchedQuantity).trim() !== '' && String(formData.dispatchedQuantity).trim() !== '0' && String(formData.dispatchedQuantity).trim() !== '۰'
-        ? String(formData.dispatchedQuantity).trim()
-        : '';
+      const dispVal = cleanDispatchedText(formData.dispatchedQuantity);
+      const preservedWaybill =
+        cleanDispatchedText(movement?.waybill_number || movement?.reference_id) ||
+        cleanDispatchedText(existingDbReceipt?.waybill_number) ||
+        cleanDispatchedText(entry?.waybill_number) ||
+        dispVal ||
+        cleanDispatchedText(entry?.dispatched);
+      const preservedDispatched = dispVal || cleanDispatchedText(entry?.dispatched) || preservedWaybill;
       const scrapNum = formData.scrapBalance !== '' ? Number(formData.scrapBalance) : 0;
       const record = LocalStorageManager.saveGoodsReceipt(
         currentEnv || 'OFFICE_WIN11',
@@ -445,10 +478,10 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
           vehicle_type: 'کامیون / خاور حمل گاز',
           plate_number: formData.vehicleNumber,
           driver_name: formData.deliveredBy,
-          waybill_number: movement?.waybill_number || movement?.reference_id || '',
+          waybill_number: preservedWaybill,
           driver_card_or_sheba: formData.driverCardOrSheba,
           driver_national_id: formData.driverNationalId,
-          dispatched: dispVal,
+          dispatched: preservedDispatched,
           scrap_balance: scrapNum,
           items: formData.items,
           signer_1: formData.receiverName,
@@ -461,19 +494,20 @@ export const GoodsEntryReceiptModal: React.FC<GoodsEntryReceiptModalProps> = ({
         currentUser?.user_id || 'USR-001'
       );
 
-      // Also ensure the GasKardexEntry has the updated dispatched, waybill_number and scrap_balance quantity
+      // Also ensure the GasKardexEntry preserves or updates dispatched, waybill_number and scrap_balance
       if (entry?.entry_id) {
-        const waybillVal = movement?.waybill_number || movement?.reference_id || '';
-        const finalDisp = dispVal || waybillVal || '';
+        const kardexUpdatePatch: Partial<GasKardexEntry> = { scrap_balance: scrapNum };
+        if (preservedDispatched) kardexUpdatePatch.dispatched = preservedDispatched;
+        if (preservedWaybill) kardexUpdatePatch.waybill_number = preservedWaybill;
         LocalStorageManager.updateKardexEntry(
           currentEnv || 'OFFICE_WIN11',
           entry.entry_id,
-          { dispatched: finalDisp, waybill_number: waybillVal, scrap_balance: scrapNum },
+          kardexUpdatePatch,
           currentUser || null
         );
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('mgas:kardex_updated', {
-            detail: { ...entry, dispatched: finalDisp, waybill_number: waybillVal, scrap_balance: scrapNum }
+            detail: { ...entry, ...kardexUpdatePatch }
           }));
         }
       }

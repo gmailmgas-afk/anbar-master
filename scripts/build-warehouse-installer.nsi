@@ -132,6 +132,21 @@ Section "اصلی" SecCore
   System::Call "user32::SendMessageTimeout(i 0xFFFF, i 0x001D, i 0, i 0, i 2, i 1000, *i 0)"
   ClearErrors
 
+  ; Default Intranet LAN Role: AUTO (Automatically connects to LAN Hub when offline, or serves locally)
+  ClearErrors
+  FileOpen $0 "$INSTDIR\intranet_role.txt" w
+  IfErrors +3
+    FileWrite $0 "AUTO$\r$\n"
+    FileClose $0
+  ClearErrors
+
+  ; Attempt silent Windows Firewall exception for Intranet TCP 3000 & UDP 3001 (succeeds silently if Admin, harmlessly ignored if standard user)
+  nsExec::Exec 'netsh advfirewall firewall delete rule name="MGas Inventory Intranet TCP"'
+  nsExec::Exec 'netsh advfirewall firewall delete rule name="MGas Inventory Intranet UDP"'
+  nsExec::Exec 'netsh advfirewall firewall add rule name="MGas Inventory Intranet TCP" dir=in action=allow program="$INSTDIR\${APP_EXE}" protocol=TCP localport=3000 profile=any'
+  nsExec::Exec 'netsh advfirewall firewall add rule name="MGas Inventory Intranet UDP" dir=in action=allow program="$INSTDIR\${APP_EXE}" protocol=UDP localport=3001 profile=any'
+  ClearErrors
+
   ; Create Web Portal Internet URL Target (https://anbar.mgas.ir)
   WriteINIStr "$INSTDIR\${WEB_SHORTCUT_NAME}.url" "InternetShortcut" "URL" "${WEB_CLOUD_URL}"
   WriteINIStr "$INSTDIR\${WEB_SHORTCUT_NAME}.url" "InternetShortcut" "IconIndex" "0"
@@ -197,8 +212,12 @@ Section "Uninstall"
   Delete "$INSTDIR\db-anbar1"
   Delete "$INSTDIR\db-anbar2"
   Delete "$INSTDIR\db-anbar3"
+  Delete "$INSTDIR\intranet_role.txt"
   Delete "$INSTDIR\uninstall.exe"
   RMDir "$INSTDIR"
+
+  nsExec::Exec 'netsh advfirewall firewall delete rule name="MGas Inventory Intranet TCP"'
+  nsExec::Exec 'netsh advfirewall firewall delete rule name="MGas Inventory Intranet UDP"'
 
   ; Remove Registry Keys
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MGasInventory"

@@ -143,6 +143,15 @@ export default {
       });
     }
 
+    if (url.pathname === '/api/intranet/status' && request.method === 'GET') {
+      return jsonResponse({
+        success: true,
+        is_desktop_server: false,
+        mode: 'cloud_web',
+        lan_enabled: false
+      });
+    }
+
     // =========================================================================
     // Authoritative Cloudflare D1 Auth & User Registry Endpoints
     // =========================================================================
