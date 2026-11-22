@@ -126,6 +126,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     activeTab === 'tri_sync' || activeTab === 'users_management' || activeTab === 'cylinder_tanks_catalog';
 
   const [isStatusMenuExpanded, setIsStatusMenuExpanded] = useState<boolean>(isTriSyncRouteActive);
+  const [isInstallersMenuExpanded, setIsInstallersMenuExpanded] = useState<boolean>(false);
   const [countdown, setCountdown] = useState<number>(SyncEngine.getRemainingSeconds());
 
   useEffect(() => {
@@ -805,15 +806,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                   </div>
 
-                  {/* Category 4: فایل‌ها، نصاب‌ها و راهنما */}
+                  {/* Category 4: دیتابیس و راهنما */}
                   <div className={`pt-2 border-t space-y-1.5 ${
                     theme === 'light' ? 'border-slate-200' : 'border-slate-800/80'
                   }`}>
                     <div className={`px-1 text-[10px] font-bold flex items-center gap-1.5 ${
                       theme === 'light' ? 'text-slate-500' : 'text-slate-400'
                     }`}>
-                      <HardDriveDownload className="w-3 h-3 text-cyan-400 shrink-0" />
-                      <span>نصاب‌ها، دیتابیس و راهنما</span>
+                      <Database className="w-3 h-3 text-indigo-400 shrink-0" />
+                      <span>دیتابیس و راهنما</span>
                     </div>
 
                     <div className="space-y-1">
@@ -830,50 +831,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       >
                         <Database className="w-3.5 h-3.5 shrink-0" />
                         <span>دانلود دیتابیس محلی (mgas_local.db)</span>
-                      </a>
-
-                      <a
-                        href="/downloads/Office-Windows11-Setup.exe"
-                        download="Office-Windows11-Setup.exe"
-                        onClick={(e) => triggerFileDownload('/downloads/Office-Windows11-Setup.exe', 'Office-Windows11-Setup.exe', e)}
-                        className={`w-full py-1.5 px-2 rounded-lg border text-[10px] font-bold flex items-center justify-between gap-1 transition-colors shadow-2xs cursor-pointer ${
-                          theme === 'light'
-                            ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
-                            : 'bg-emerald-900/40 hover:bg-emerald-800/60 text-emerald-300 hover:text-emerald-100 border-emerald-700/60'
-                        }`}
-                        title="دانلود نصاب رسمی ۶۴ بیتی دفتر (ویندوز ۱۰ و ۱۱)"
-                      >
-                        <span className="flex items-center gap-1.5">
-                          <HardDriveDownload className="w-3.5 h-3.5 shrink-0" />
-                          <span>نصاب آفیس ۶۴ بیتی (Win 10/11)</span>
-                        </span>
-                        <span className={`text-[9px] px-1 py-0.2 rounded border font-mono ${
-                          theme === 'light'
-                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                            : 'bg-emerald-950 text-emerald-300 border-emerald-800'
-                        }`}>x64</span>
-                      </a>
-
-                      <a
-                        href="/downloads/Warehouse-Windows7-Setup.exe"
-                        download="Warehouse-Windows7-Setup.exe"
-                        onClick={(e) => triggerFileDownload('/downloads/Warehouse-Windows7-Setup.exe', 'Warehouse-Windows7-Setup.exe', e)}
-                        className={`w-full py-1.5 px-2 rounded-lg border text-[10px] font-bold flex items-center justify-between gap-1 transition-colors shadow-2xs cursor-pointer ${
-                          theme === 'light'
-                            ? 'bg-cyan-50 hover:bg-cyan-100 text-cyan-800 border-cyan-200'
-                            : 'bg-cyan-950/50 hover:bg-cyan-900/60 text-cyan-300 hover:text-cyan-100 border-cyan-700/60'
-                        }`}
-                        title="دانلود نصاب رسمی ۳۲ بیتی انبار (ویندوز ۷ و بالاتر)"
-                      >
-                        <span className="flex items-center gap-1.5">
-                          <HardDriveDownload className="w-3.5 h-3.5 shrink-0" />
-                          <span>نصاب انبار ۳۲ بیتی (Win 7)</span>
-                        </span>
-                        <span className={`text-[9px] px-1 py-0.2 rounded border font-mono ${
-                          theme === 'light'
-                            ? 'bg-cyan-100 text-cyan-800 border-cyan-300'
-                            : 'bg-cyan-950 text-cyan-300 border-cyan-800'
-                        }`}>x86</span>
                       </a>
 
                       {onOpenWin11Troubleshooting && (
@@ -935,9 +892,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
         })}
       </nav>
 
-      {/* Footer info */}
+      {/* Bottom-Pinned Public Menu: نسخه‌های نصبی ویندوز (قابل مشاهده و دانلود برای تمامی کاربران) */}
       {!isMobile && isCollapsed ? (
         <div className="p-2 border-t border-slate-800/80 bg-slate-950/60 flex flex-col items-center gap-1.5 justify-center">
+          <button
+            type="button"
+            onClick={() => {
+              setIsCollapsed(false);
+              setIsInstallersMenuExpanded(true);
+            }}
+            className={`p-2 rounded-lg transition-colors cursor-pointer ${
+              theme === 'light'
+                ? 'text-cyan-700 hover:bg-cyan-100'
+                : 'text-cyan-400 hover:text-white hover:bg-slate-800'
+            }`}
+            title="دانلود نسخه‌های نصبی ویندوز (آفیس ۶۴ بیتی و انبار ۳۲ بیتی)"
+          >
+            <HardDriveDownload className="w-4 h-4" />
+          </button>
           {onToggleTheme && (
             <button
               type="button"
@@ -959,7 +931,100 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
       ) : (
-        <div className="p-3 border-t border-slate-800/80 bg-slate-950/60 text-[11px] text-slate-400 space-y-2">
+        <div className={`mt-auto border-t ${
+          theme === 'light' ? 'border-slate-200 bg-slate-50/90' : 'border-slate-800/80 bg-slate-950/70'
+        }`}>
+          {/* New Public Installers Menu Pinned at Bottom */}
+          <div className={`p-2 border-b space-y-1.5 ${
+            theme === 'light' ? 'border-slate-200' : 'border-slate-800/80'
+          }`}>
+            <button
+              type="button"
+              aria-expanded={isInstallersMenuExpanded}
+              onClick={() => setIsInstallersMenuExpanded(prev => !prev)}
+              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
+                theme === 'light'
+                  ? 'bg-cyan-50 hover:bg-cyan-100 text-cyan-900 border-cyan-200'
+                  : 'bg-cyan-950/40 hover:bg-cyan-900/50 text-cyan-200 border-cyan-800/60'
+              }`}
+              title="مشاهده و دانلود نسخه‌های نصبی ویندوز برای همه کاربران"
+            >
+              <span className="flex items-center gap-2 min-w-0">
+                <HardDriveDownload className={`w-4 h-4 shrink-0 ${theme === 'light' ? 'text-cyan-700' : 'text-cyan-400'}`} />
+                <span className="truncate">نسخه‌های نصبی ویندوز</span>
+              </span>
+              <span className="flex items-center gap-1 shrink-0">
+                <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono border ${
+                  theme === 'light'
+                    ? 'bg-white text-cyan-800 border-cyan-300'
+                    : 'bg-cyan-950 text-cyan-300 border-cyan-800'
+                }`}>
+                  دانلود
+                </span>
+                {isInstallersMenuExpanded ? (
+                  <ChevronUp className="w-3.5 h-3.5 opacity-80" />
+                ) : (
+                  <ChevronDown className="w-3.5 h-3.5 opacity-80" />
+                )}
+              </span>
+            </button>
+
+            {isInstallersMenuExpanded && (
+              <div className="space-y-1.5 pt-1">
+                <a
+                  href="/downloads/Office-Windows11-Setup.exe"
+                  download="Office-Windows11-Setup.exe"
+                  onClick={(e) => {
+                    triggerFileDownload('/downloads/Office-Windows11-Setup.exe', 'Office-Windows11-Setup.exe', e);
+                    if (isMobile && onCloseMobile) onCloseMobile();
+                  }}
+                  className={`w-full py-1.5 px-2 rounded-lg border text-[10px] font-bold flex items-center justify-between gap-1 transition-colors shadow-2xs cursor-pointer ${
+                    theme === 'light'
+                      ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+                      : 'bg-emerald-900/40 hover:bg-emerald-800/60 text-emerald-300 hover:text-emerald-100 border-emerald-700/60'
+                  }`}
+                  title="دانلود نصاب رسمی ۶۴ بیتی دفتر (ویندوز ۱۰ و ۱۱)"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <HardDriveDownload className="w-3.5 h-3.5 shrink-0" />
+                    <span>نصاب آفیس ۶۴ بیتی (Win 10/11)</span>
+                  </span>
+                  <span className={`text-[9px] px-1 py-0.2 rounded border font-mono ${
+                    theme === 'light'
+                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                      : 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                  }`}>x64</span>
+                </a>
+
+                <a
+                  href="/downloads/Warehouse-Windows7-Setup.exe"
+                  download="Warehouse-Windows7-Setup.exe"
+                  onClick={(e) => {
+                    triggerFileDownload('/downloads/Warehouse-Windows7-Setup.exe', 'Warehouse-Windows7-Setup.exe', e);
+                    if (isMobile && onCloseMobile) onCloseMobile();
+                  }}
+                  className={`w-full py-1.5 px-2 rounded-lg border text-[10px] font-bold flex items-center justify-between gap-1 transition-colors shadow-2xs cursor-pointer ${
+                    theme === 'light'
+                      ? 'bg-cyan-50 hover:bg-cyan-100 text-cyan-800 border-cyan-200'
+                      : 'bg-cyan-950/50 hover:bg-cyan-900/60 text-cyan-300 hover:text-cyan-100 border-cyan-700/60'
+                  }`}
+                  title="دانلود نصاب رسمی ۳۲ بیتی انبار (ویندوز ۷ و بالاتر)"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <HardDriveDownload className="w-3.5 h-3.5 shrink-0" />
+                    <span>نصاب انبار ۳۲ بیتی (Win 7)</span>
+                  </span>
+                  <span className={`text-[9px] px-1 py-0.2 rounded border font-mono ${
+                    theme === 'light'
+                      ? 'bg-cyan-100 text-cyan-800 border-cyan-300'
+                      : 'bg-cyan-950 text-cyan-300 border-cyan-800'
+                  }`}>x86</span>
+                </a>
+              </div>
+            )}
+          </div>
+
+          <div className="p-3 text-[11px] text-slate-400 space-y-2">
           {onToggleTheme && (
             <button
               type="button"
@@ -1003,6 +1068,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
         </div>
+      </div>
       )}
     </>
   );

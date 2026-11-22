@@ -1610,8 +1610,30 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
     }));
   };
 
+  // Build canonical sheet number preserving prefix/date/count when present
+  const buildDirectionalSheetNumber = (
+    currentSheet: string | undefined,
+    direction: 'i' | 'e',
+    dateStr?: string
+  ): string => {
+    const trimmed = String(currentSheet || '').trim();
+    if (/^[A-Z]{2}\d{6}[ieIE]$/.test(trimmed)) {
+      return `${trimmed.slice(0, -1)}${direction}`;
+    }
+    return generateSheetNumber(
+      currentCustomer?.name || 'البرز گاز',
+      dateStr || getPersianDate(),
+      direction,
+      dailyLoadingCount
+    );
+  };
+
   // Regenerate sheet number strictly on demand
   const handleRegenerateSheetNumber = (direction = entryTab, date = newEntry.date, count = dailyLoadingCount) => {
+    const cylIn = Number(newEntry.cylinder_in) || 0;
+    const cylOut = Number(newEntry.cylinder_out) || 0;
+    const effectiveDirection: 'in' | 'out' =
+      cylOut > 0 && cylIn <= 0 ? 'out' : cylIn > 0 && cylOut <= 0 ? 'in' : direction;
     const calculatedCount = count || calculateDailyRequestCount(
       allKardexEntries,
       currentCustomer?.name || currentCustomer?.customer_id || '',
@@ -1621,7 +1643,7 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
     const generated = generateSheetNumber(
       currentCustomer?.name || 'البرز گاز',
       date || getPersianDate(),
-      direction === 'in' ? 'i' : 'e',
+      effectiveDirection === 'in' ? 'i' : 'e',
       calculatedCount
     );
     setNewEntry(prev => ({ ...prev, transfer_sheet_number: generated }));
@@ -1659,6 +1681,23 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
   // 4. شیر کهنه: مقدار ورودی شیر کهنه نیازی نیست مستقیماً با ورودی سیلندر پر شود و به صورت دستی نوشته می‌شود.
   //    مانده شیر کهنه = مانده قبل + ورودی شیر کهنه - خروج شیر کهنه (نمی‌تواند منفی شود و حداقل صفر است)
   const updateNewEntryField = (field: string, value: any) => {
+    if (field === 'cylinder_in' || field === 'cylinder_out') {
+      const prevCylIn = Number(newEntry.cylinder_in) || 0;
+      const prevCylOut = Number(newEntry.cylinder_out) || 0;
+      const nextCylIn = field === 'cylinder_in' ? (Number(value) || 0) : prevCylIn;
+      const nextCylOut = field === 'cylinder_out' ? (Number(value) || 0) : prevCylOut;
+
+      if (nextCylIn > 0 && nextCylOut > 0) {
+        if (!(prevCylIn > 0 && prevCylOut > 0)) {
+          showToast('هشدار: امکان پر کردن همزمان دو کاردکس (ورود و خروج سیلندر) وجود ندارد!', 'error');
+        }
+      } else if (nextCylIn > 0 && nextCylOut <= 0 && entryTab !== 'in') {
+        setEntryTab('in');
+      } else if (nextCylOut > 0 && nextCylIn <= 0 && entryTab !== 'out') {
+        setEntryTab('out');
+      }
+    }
+
     setNewEntry(prev => {
       const next = { ...prev, [field]: value };
       if (
@@ -1680,6 +1719,15 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
       const cylOut = field === 'cylinder_out' ? (Number(value) || 0) : (Number(next.cylinder_out) || 0);
       const scrapOut = field === 'scrap_out' ? (Number(value) || 0) : (Number(next.scrap_out) || 0);
       const scrapStockIn = field === 'scrap_stock_in' ? (Number(value) || 0) : (Number(next.scrap_stock_in) || 0);
+
+      // تغییر خودکار شماره برگه انتقال بر اساس ورود (i) یا خروج (e) سیلندر
+      if (field === 'cylinder_in' || field === 'cylinder_out') {
+        if (cylIn > 0 && cylOut <= 0) {
+          next.transfer_sheet_number = buildDirectionalSheetNumber(prev.transfer_sheet_number, 'i', next.date);
+        } else if (cylOut > 0 && cylIn <= 0) {
+          next.transfer_sheet_number = buildDirectionalSheetNumber(prev.transfer_sheet_number, 'e', next.date);
+        }
+      }
 
       // Rule: فیلد "خروج شیر نو" همیشه برابر است با مقدار "خروج سیلندر" است و از "مانده شیر نو" سطر قبل کم میشود.
       // سلول شیر کهنه وابسته به جایی نیست و با خروج سیلندر تغییر نمی‌کند
@@ -1731,6 +1779,16 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
   };
 
   const updateEditFormField = (field: string, value: any) => {
+    if (field === 'cylinder_in' || field === 'cylinder_out') {
+      const prevCylIn = Number(editKardexForm.cylinder_in) || 0;
+      const prevCylOut = Number(editKardexForm.cylinder_out) || 0;
+      const nextCylIn = field === 'cylinder_in' ? (Number(value) || 0) : prevCylIn;
+      const nextCylOut = field === 'cylinder_out' ? (Number(value) || 0) : prevCylOut;
+      if (nextCylIn > 0 && nextCylOut > 0 && !(prevCylIn > 0 && prevCylOut > 0)) {
+        showToast('هشدار: امکان پر کردن همزمان دو کاردکس (ورود و خروج سیلندر) وجود ندارد!', 'error');
+      }
+    }
+
     setEditKardexForm(prev => {
       const next = { ...prev, [field]: value };
       if (
@@ -1752,6 +1810,14 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
       const cylOut = field === 'cylinder_out' ? (Number(value) || 0) : (Number(next.cylinder_out) || 0);
       const scrapOut = field === 'scrap_out' ? (Number(value) || 0) : (Number(next.scrap_out) || 0);
       const scrapStockIn = field === 'scrap_stock_in' ? (Number(value) || 0) : (Number(next.scrap_stock_in) || 0);
+
+      if ((field === 'cylinder_in' || field === 'cylinder_out') && /^[A-Z]{2}\d{6}[ieIE]$/.test(String(prev.transfer_sheet_number || '').trim())) {
+        if (cylIn > 0 && cylOut <= 0) {
+          next.transfer_sheet_number = `${String(prev.transfer_sheet_number).trim().slice(0, -1)}i`;
+        } else if (cylOut > 0 && cylIn <= 0) {
+          next.transfer_sheet_number = `${String(prev.transfer_sheet_number).trim().slice(0, -1)}e`;
+        }
+      }
 
       // Rule: خروج شیر نو برابر خروج سیلندر؛ اما سلول شیر کهنه مستقل است و وابسته به جایی نیست
       if (field === 'cylinder_out') {
@@ -1829,20 +1895,38 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
       return;
     }
 
+    const cylInVal = sanitizeNumber(newEntry.cylinder_in, 0, 0, 1000000);
+    const cylOutVal = sanitizeNumber(newEntry.cylinder_out, 0, 0, 1000000);
+    if (cylInVal > 0 && cylOutVal > 0) {
+      showToast('امکان پر کردن همزمان دو کاردکس (ورود و خروج سیلندر) وجود ندارد! لطفاً فقط یکی از فیلدهای ورود یا خروج سیلندر را پر کنید.', 'error');
+      return;
+    }
+
     const entryId = generateUUID('GK');
     const eventId = generateUUID('EVT-GK');
 
+    const resolvedDirection: 'i' | 'e' =
+      cylOutVal > 0 && cylInVal === 0
+        ? 'e'
+        : cylInVal > 0 && cylOutVal === 0
+        ? 'i'
+        : entryTab === 'in'
+        ? 'i'
+        : 'e';
+
     // Canonical sheet number strictly conforming to: [CustomerCode] + [MMDDCC] + [i/e]
     const finalSheetNumber = sheetCheck.cleanValue
-      ? sheetCheck.cleanValue
+      ? (/^[A-Z]{2}\d{6}[ieIE]$/.test(sheetCheck.cleanValue) && (cylInVal > 0 || cylOutVal > 0)
+          ? `${sheetCheck.cleanValue.slice(0, -1)}${resolvedDirection}`
+          : sheetCheck.cleanValue)
       : generateSheetNumber(
           currentCustomer.name,
           dateCheck.cleanValue || getPersianDate(),
-          entryTab === 'in' ? 'i' : 'e',
+          resolvedDirection,
           dailyLoadingCount
         );
 
-    const isIncoming = entryTab === 'in';
+    const isIncoming = resolvedDirection === 'i';
 
     // ستون ارسالی و شماره بارنامه: هم عدد (شماره بارنامه) و هم متن ارسالی را می‌پذیرد
     const rawDispatched = typeof newEntry.dispatched === 'string' ? newEntry.dispatched.trim() : (newEntry.dispatched ? String(newEntry.dispatched).trim() : '');
@@ -1856,8 +1940,6 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
       const prevNewValves = targetStock ? targetStock.customerNewValveBalance : (stats.currentNewValves || 0);
       const prevUsedValves = targetStock ? targetStock.customerUsedValveBalance : (stats.currentUsedValves || 0);
 
-      const cylInVal = sanitizeNumber(newEntry.cylinder_in, 0, 0, 1000000);
-      const cylOutVal = sanitizeNumber(newEntry.cylinder_out, 0, 0, 1000000);
       const scrapOutVal = sanitizeNumber(newEntry.scrap_out, 0, 0, 1000000);
       const scrapStockInVal = sanitizeNumber(newEntry.scrap_stock_in, 0, 0, 1000000);
 
@@ -2324,6 +2406,13 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
     const dateCheck = validateFieldSecurity(editKardexForm.date, 'تاریخ سند', { maxLength: 20 });
     if (!dateCheck.isValid) {
       showToast(dateCheck.error!, 'error');
+      return;
+    }
+
+    const editCylIn = sanitizeNumber(editKardexForm.cylinder_in, 0, 0, 1000000);
+    const editCylOut = sanitizeNumber(editKardexForm.cylinder_out, 0, 0, 1000000);
+    if (editCylIn > 0 && editCylOut > 0) {
+      showToast('امکان پر کردن همزمان دو کاردکس (ورود و خروج سیلندر) وجود ندارد! لطفاً یکی از فیلدهای ورود یا خروج سیلندر را صفر کنید.', 'error');
       return;
     }
 
@@ -4593,10 +4682,29 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
 
                 {/* Sheet Number Input with Auto-Calculated Loading Sequence (7 cols) - Read Only */}
                 <div className="md:col-span-7">
-                  <div className="flex items-center justify-between h-5 mb-1.5">
+                  <div className="flex items-center justify-between h-5 mb-1.5 gap-2">
                     <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                      <Hash className={`w-3.5 h-3.5 shrink-0 ${entryTab === 'in' ? 'text-emerald-400' : 'text-amber-400'}`} />
+                      <Hash className={`w-3.5 h-3.5 shrink-0 ${
+                        (Number(newEntry.cylinder_in) || 0) > 0 && (Number(newEntry.cylinder_out) || 0) > 0
+                          ? 'text-rose-400'
+                          : entryTab === 'in'
+                            ? 'text-emerald-400'
+                            : 'text-amber-400'
+                      }`} />
                       <span>شماره برگه انتقال (تولید خودکار سیستمی) *</span>
+                      {(Number(newEntry.cylinder_in) || 0) > 0 && (Number(newEntry.cylinder_out) || 0) > 0 ? (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-950/90 border border-rose-500/70 text-rose-300 font-bold">
+                          تداخل ورود و خروج
+                        </span>
+                      ) : (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded border font-bold ${
+                          entryTab === 'in'
+                            ? 'bg-emerald-950/80 border-emerald-700/70 text-emerald-300'
+                            : 'bg-amber-950/80 border-amber-700/70 text-amber-300'
+                        }`}>
+                          {entryTab === 'in' ? 'شماره ورود (i)' : 'شماره خروج (e)'}
+                        </span>
+                      )}
                     </label>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
@@ -4628,11 +4736,13 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
                       value={newEntry.transfer_sheet_number}
                       placeholder={generateSheetNumber(currentCustomer?.name || 'البرز گاز', newEntry.date || getPersianDate(), entryTab === 'in' ? 'i' : 'e', dailyLoadingCount)}
                       className={`w-full h-[38px] text-xs font-mono font-bold tracking-wider rounded-xl pr-3 pl-9 bg-slate-900/90 border cursor-not-allowed select-all focus:outline-hidden ${
-                        entryTab === 'in'
-                          ? 'border-emerald-500/50 text-emerald-300'
-                          : 'border-amber-500/50 text-amber-300'
+                        (Number(newEntry.cylinder_in) || 0) > 0 && (Number(newEntry.cylinder_out) || 0) > 0
+                          ? 'border-rose-500 text-rose-300 ring-1 ring-rose-500/60'
+                          : entryTab === 'in'
+                            ? 'border-emerald-500/50 text-emerald-300'
+                            : 'border-amber-500/50 text-amber-300'
                       }`}
-                      title="این شماره به‌صورت سیستمی و خودکار تولید می‌شود و امکان ویرایش دستی ندارد."
+                      title="این شماره به‌صورت سیستمی بر اساس ورود یا خروج سیلندر تولید می‌شود."
                     />
                     <div className="absolute left-3 text-slate-500 pointer-events-none" title="قفل‌شده">
                       <Lock className="w-3.5 h-3.5 text-slate-400/70" />
@@ -4841,10 +4951,12 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
                             onFocus={e => { if (e.target.value === '0') e.target.select(); }}
                             onChange={e => updateNewEntryField('cylinder_in', e.target.value === '' ? 0 : Number(e.target.value))}
                             placeholder="0"
-                            className={`w-full text-center text-[11px] font-mono font-bold bg-slate-900 border rounded px-0.5 py-0.5 h-7 leading-none text-blue-100 placeholder-slate-600 focus:outline-hidden ${
-                              entryTab === 'in'
-                                ? 'border-emerald-500/80 ring-1 ring-emerald-500/50 focus:border-emerald-400'
-                                : 'border-blue-600/70 focus:border-blue-400'
+                            className={`w-full text-center text-[11px] font-mono font-bold rounded px-0.5 py-0.5 h-7 leading-none placeholder-slate-600 focus:outline-hidden ${
+                              (Number(newEntry.cylinder_in) || 0) > 0 && (Number(newEntry.cylinder_out) || 0) > 0
+                                ? 'bg-rose-950/60 border border-rose-500 ring-2 ring-rose-500/70 text-rose-100'
+                                : entryTab === 'in'
+                                  ? 'bg-slate-900 border border-emerald-500/80 ring-1 ring-emerald-500/50 text-blue-100 focus:border-emerald-400'
+                                  : 'bg-slate-900 border border-blue-600/70 text-blue-100 focus:border-blue-400'
                             }`}
                           />
                         </td>
@@ -4858,10 +4970,12 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
                             onFocus={e => { if (e.target.value === '0') e.target.select(); }}
                             onChange={e => updateNewEntryField('cylinder_out', e.target.value === '' ? 0 : Number(e.target.value))}
                             placeholder="0"
-                            className={`w-full text-center text-[11px] font-mono font-bold bg-slate-900 border rounded px-0.5 py-0.5 h-7 leading-none text-rose-100 placeholder-slate-600 focus:outline-hidden ${
-                              entryTab === 'out'
-                                ? 'border-rose-500 ring-1 ring-rose-500/50 focus:border-rose-400'
-                                : 'border-rose-600/60 focus:border-rose-400'
+                            className={`w-full text-center text-[11px] font-mono font-bold rounded px-0.5 py-0.5 h-7 leading-none placeholder-slate-600 focus:outline-hidden ${
+                              (Number(newEntry.cylinder_in) || 0) > 0 && (Number(newEntry.cylinder_out) || 0) > 0
+                                ? 'bg-rose-950/60 border border-rose-500 ring-2 ring-rose-500/70 text-rose-100'
+                                : entryTab === 'out'
+                                  ? 'bg-slate-900 border border-rose-500 ring-1 ring-rose-500/50 text-rose-100 focus:border-rose-400'
+                                  : 'bg-slate-900 border border-rose-600/60 text-rose-100 focus:border-rose-400'
                             }`}
                           />
                         </td>
@@ -5090,6 +5204,21 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
                     </tbody>
                   </table>
                 </div>
+
+                {/* Simultaneous Entry + Exit Conflict Warning Banner */}
+                {(Number(newEntry.cylinder_in) || 0) > 0 && (Number(newEntry.cylinder_out) || 0) > 0 && (
+                  <div className="p-2.5 bg-rose-950/85 border-2 border-rose-500 rounded-xl flex items-start gap-2.5 text-rose-100 text-xs shadow-lg">
+                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="text-rose-100 block text-[11.5px]">
+                        هشدار: امکان پر کردن همزمان دو کاردکس وجود ندارد
+                      </strong>
+                      <span className="text-[10.5px] text-rose-200 leading-relaxed block mt-0.5">
+                        فیلدهای «ورودی سیلندر» و «خروجی سیلندر» هم‌زمان دارای عدد هستند. لطفاً برای ثبت ورود فقط فیلد ورودی و برای ثبت خروج فقط فیلد خروجی را پر کرده و فیلد دیگر را صفر (۰) کنید.
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Negative Warning Banner if new valve balance is negative */}
                 {!isTankType(newEntry.cylinder_type || selectedCylinderType) && newEntry.new_valve_balance < 0 && (
@@ -6135,10 +6264,12 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
                               onFocus={e => { if (e.target.value === '0') e.target.select(); }}
                               onChange={e => updateEditFormField('cylinder_in', e.target.value === '' ? 0 : Number(e.target.value))}
                               placeholder="0"
-                              className={`w-full text-center text-[11px] font-mono font-bold bg-slate-900 border rounded px-0.5 py-0.5 h-7 leading-none text-blue-100 placeholder-slate-600 focus:outline-hidden ${
-                                isEntryIn
-                                  ? 'border-emerald-500/80 ring-1 ring-emerald-500/50 focus:border-emerald-400'
-                                  : 'border-blue-600/70 focus:border-blue-400'
+                              className={`w-full text-center text-[11px] font-mono font-bold rounded px-0.5 py-0.5 h-7 leading-none placeholder-slate-600 focus:outline-hidden ${
+                                (Number(editKardexForm.cylinder_in) || 0) > 0 && (Number(editKardexForm.cylinder_out) || 0) > 0
+                                  ? 'bg-rose-950/60 border border-rose-500 ring-2 ring-rose-500/70 text-rose-100'
+                                  : isEntryIn
+                                    ? 'bg-slate-900 border border-emerald-500/80 ring-1 ring-emerald-500/50 text-blue-100 focus:border-emerald-400'
+                                    : 'bg-slate-900 border border-blue-600/70 text-blue-100 focus:border-blue-400'
                               }`}
                             />
                           </td>
@@ -6152,10 +6283,12 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
                               onFocus={e => { if (e.target.value === '0') e.target.select(); }}
                               onChange={e => updateEditFormField('cylinder_out', e.target.value === '' ? 0 : Number(e.target.value))}
                               placeholder="0"
-                              className={`w-full text-center text-[11px] font-mono font-bold bg-slate-900 border rounded px-0.5 py-0.5 h-7 leading-none text-rose-100 placeholder-slate-600 focus:outline-hidden ${
-                                !isEntryIn
-                                  ? 'border-rose-500 ring-1 ring-rose-500/50 focus:border-rose-400'
-                                  : 'border-rose-600/60 focus:border-rose-400'
+                              className={`w-full text-center text-[11px] font-mono font-bold rounded px-0.5 py-0.5 h-7 leading-none placeholder-slate-600 focus:outline-hidden ${
+                                (Number(editKardexForm.cylinder_in) || 0) > 0 && (Number(editKardexForm.cylinder_out) || 0) > 0
+                                  ? 'bg-rose-950/60 border border-rose-500 ring-2 ring-rose-500/70 text-rose-100'
+                                  : !isEntryIn
+                                    ? 'bg-slate-900 border border-rose-500 ring-1 ring-rose-500/50 text-rose-100 focus:border-rose-400'
+                                    : 'bg-slate-900 border border-rose-600/60 text-rose-100 focus:border-rose-400'
                               }`}
                             />
                           </td>
@@ -6356,6 +6489,21 @@ export const GasKardexView: React.FC<GasKardexViewProps> = ({
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Simultaneous Entry + Exit Conflict Warning Banner (Edit Modal) */}
+                  {(Number(editKardexForm.cylinder_in) || 0) > 0 && (Number(editKardexForm.cylinder_out) || 0) > 0 && (
+                    <div className="p-2.5 bg-rose-950/85 border-2 border-rose-500 rounded-xl flex items-start gap-2.5 text-rose-100 text-xs shadow-lg">
+                      <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                      <div>
+                        <strong className="text-rose-100 block text-[11.5px]">
+                          هشدار: امکان پر کردن همزمان دو کاردکس وجود ندارد
+                        </strong>
+                        <span className="text-[10.5px] text-rose-200 leading-relaxed block mt-0.5">
+                          فیلدهای «ورودی سیلندر» و «خروجی سیلندر» هم‌زمان دارای عدد هستند. لطفاً یکی از این دو فیلد را صفر (۰) کنید.
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Negative Warning Banner if new valve balance is negative */}
                   {editKardexForm.new_valve_balance < 0 && (
